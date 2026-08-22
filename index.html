@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FAF7F0">
+<title>教育漢字 · Grade Kanji</title>
+<style>
+:root{
+  --paper:#FAF7F0;
+  --sumi:#17160F;
+  --sage:#8A9A82;
+  --rule:#D9DBD0;
+  --shu:#C4331D;
+  --mist:#6B6A60;
+  --faint:#EFEDE4;
+  --cell:  min(19vw, 76px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --serif: "Hiragino Mincho ProN","Yu Mincho",YuMincho,"Songti SC","Noto Serif JP",serif;
+  --sans: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Noto Sans JP","Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--sumi);
+  font-family:var(--sans); font-size:16px; line-height:1.6;
+  -webkit-text-size-adjust:100%;
+  overscroll-behavior-y:none;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--shu); outline-offset:2px}
+.hidden{display:none !important}
+
+/* ---------- utility type ---------- */
+.eyebrow{
+  font-size:10px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--sage); font-weight:700;
+}
+.mincho{font-family:var(--serif)}
+
+/* ---------- app shell ---------- */
+header#bar{
+  position:sticky; top:0; z-index:20; background:var(--paper);
+  border-bottom:1px solid var(--rule);
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;
+}
+.bar-top{display:flex; align-items:baseline; gap:10px}
+.wordmark{font-family:var(--serif); font-size:19px; letter-spacing:.06em}
+.bar-top .eyebrow{margin-left:auto}
+#gearBtn{font-size:18px; line-height:1; padding:4px 2px 4px 10px; color:var(--mist)}
+
+/* grade tabs */
+nav#grades{display:flex; gap:0; margin-top:10px}
+nav#grades button{
+  flex:1; padding:9px 0 8px; font-family:var(--serif); font-size:16px;
+  color:var(--mist); border-bottom:2px solid transparent; letter-spacing:.04em;
+}
+nav#grades button[aria-selected="true"]{color:var(--sumi); border-bottom-color:var(--shu)}
+nav#grades button small{display:block; font-family:var(--sans); font-size:9.5px;
+  letter-spacing:.1em; color:var(--sage); margin-top:1px}
+
+/* tools row */
+.tools{display:flex; gap:8px; padding:9px 0 10px; align-items:center}
+#search{
+  flex:1; min-width:0; font:inherit; font-size:15px; padding:7px 10px;
+  background:#fff; border:1px solid var(--rule); border-radius:0; color:var(--sumi);
+}
+#search::placeholder{color:#A9A79C}
+#filter{
+  font:inherit; font-size:12.5px; padding:7px 8px; background:#fff;
+  border:1px solid var(--rule); border-radius:0; color:var(--mist);
+}
+
+/* ---------- the manuscript grid ---------- */
+main{padding:0 14px calc(96px + var(--safe-b))}
+#grid{
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--cell),1fr));
+  gap:1px; background:var(--rule); border:1px solid var(--rule);
+}
+.cell{
+  position:relative; aspect-ratio:1; background:var(--paper);
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-size:calc(var(--cell) * .54); line-height:1;
+  padding:0; animation:in .32s ease both;
+}
+@keyframes in{from{opacity:0} to{opacity:1}}
+.cell::before,.cell::after{
+  content:""; position:absolute; background:var(--faint); pointer-events:none;
+}
+.cell::before{left:50%; top:8%; bottom:8%; width:1px; transform:translateX(-.5px)}
+.cell::after{top:50%; left:8%; right:8%; height:1px; transform:translateY(-.5px)}
+/* A teacher's red pen: an underline while you're working on it,
+   the whole character in vermilion once it's marked correct. */
+.cell.st-learning{box-shadow:inset 0 -3px 0 var(--shu)}
+.cell.st-known{background:#F4F1E6}
+.cell.st-known span{color:var(--shu)}
+.cell span{position:relative; z-index:1}
+.cell .lvl{
+  position:absolute; top:2px; right:3px; z-index:2; font-family:var(--sans);
+  font-size:8.5px; color:var(--sage); letter-spacing:.02em;
+}
+.cell:active{background:#EDE9DC}
+
+.empty{padding:44px 4px; color:var(--mist); font-size:14.5px; text-align:center}
+.empty b{display:block; font-family:var(--serif); font-size:19px; color:var(--sumi);
+  margin-bottom:6px; font-weight:400}
+
+/* ---------- study launcher ---------- */
+#launch{
+  position:fixed; left:0; right:0; bottom:0; z-index:25;
+  padding:10px 14px calc(10px + var(--safe-b));
+  background:linear-gradient(to top, var(--paper) 62%, rgba(250,247,240,0));
+  display:flex; gap:8px;
+}
+#launch button{
+  flex:1; padding:13px; background:var(--sumi); color:var(--paper);
+  font-size:14.5px; letter-spacing:.03em; font-weight:600;
+}
+#launch button:active{background:#332F22}
+#launch button[disabled]{opacity:.35}
+
+/* ---------- sheet (detail) ---------- */
+.scrim{
+  position:fixed; inset:0; z-index:40; background:rgba(23,22,15,.32);
+  animation:fade .18s ease both;
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:41; max-height:92vh;
+  background:var(--paper); border-top:1px solid var(--sumi);
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:0 18px calc(28px + var(--safe-b));
+  animation:up .26s cubic-bezier(.22,.8,.28,1) both;
+}
+@keyframes up{from{transform:translateY(14px); opacity:0}to{transform:none; opacity:1}}
+.sheet-head{
+  position:sticky; top:0; background:var(--paper); padding:12px 0 6px;
+  display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--rule);
+}
+.sheet-head .eyebrow{flex:1}
+.sheet-head button{font-size:22px; line-height:1; color:var(--mist); padding:2px 4px}
+
+/* the enlarged practice square */
+.square{
+  width:min(48vw,190px); aspect-ratio:1; margin:20px auto 14px; position:relative;
+  border:1px solid var(--sage); display:flex; align-items:center; justify-content:center;
+  background:#fff;
+}
+.square::before,.square::after{content:""; position:absolute; pointer-events:none}
+.square::before{
+  left:50%; top:0; bottom:0; width:0; transform:translateX(-.5px);
+  border-left:1px dashed rgba(196,51,29,.30);
+}
+.square::after{
+  top:50%; left:0; right:0; height:0; transform:translateY(-.5px);
+  border-top:1px dashed rgba(196,51,29,.30);
+}
+.square b{font-family:var(--serif); font-size:min(34vw,132px); font-weight:400; line-height:1}
+
+.glosses{text-align:center; font-size:21px; font-weight:600; letter-spacing:.01em}
+.readings{
+  display:flex; flex-wrap:wrap; justify-content:center; gap:6px 16px;
+  margin:10px 0 2px; font-family:var(--serif); font-size:17px;
+}
+.readings i{font-style:normal}
+.readings .eyebrow{margin-right:5px; position:relative; top:-2px}
+.parts{
+  text-align:center; font-size:13.5px; color:var(--mist); margin-top:12px;
+  padding-top:12px; border-top:1px solid var(--rule);
+}
+.parts em{font-style:normal; color:var(--sage)}
+.parts .pc{font-family:var(--serif); font-size:16px; color:var(--sumi)}
+
+section.mn{margin-top:20px}
+section.mn .eyebrow{display:block; margin-bottom:7px}
+section.mn p{margin:0; font-size:15.5px; line-height:1.72}
+section.mn .hint{
+  margin-top:9px; font-size:13.5px; color:var(--mist);
+  border-left:2px solid var(--rule); padding-left:10px;
+}
+.srcline{
+  margin-top:24px; padding-top:12px; border-top:1px solid var(--rule);
+  font-size:11.5px; color:var(--sage); display:flex; gap:10px; align-items:center;
+}
+.srcline a{color:var(--sage)}
+.markbtn{
+  margin-left:auto; border:1px solid var(--rule); padding:7px 12px; font-size:12.5px;
+  color:var(--mist); background:#fff;
+}
+.markbtn.on{background:var(--shu); border-color:var(--shu); color:#fff}
+
+/* WaniKani's own colour coding for referenced items */
+.wk-radical{color:#3E7CA6; font-weight:600}
+.wk-kanji{color:var(--shu); font-weight:600}
+.wk-vocabulary{color:#7A5AA6; font-weight:600}
+.wk-reading{background:var(--sumi); color:var(--paper); padding:0 5px}
+.wk-meaning{background:var(--faint); padding:0 5px}
+
+/* ---------- study ---------- */
+#study{
+  position:fixed; inset:0; z-index:50; background:var(--paper);
+  display:flex; flex-direction:column;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 18px calc(16px + var(--safe-b));
+}
+.st-head{display:flex; align-items:center; gap:12px; padding-bottom:10px}
+.st-head button{font-size:13px; color:var(--mist); letter-spacing:.03em}
+.st-count{margin-left:auto; font-size:12px; color:var(--sage); letter-spacing:.1em}
+.st-body{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:8px}
+/* Before the answer shows, the character is the whole screen's job. */
+.st-body.front{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  overflow:hidden;
+}
+.st-body.front .square{width:min(64vw,270px); margin:0}
+.st-body.front .square b{font-size:min(46vw,196px)}
+.st-body.front .st-tap{margin-top:26px}
+.st-tap{
+  text-align:center; color:var(--sage); font-size:12.5px; letter-spacing:.1em;
+  text-transform:uppercase; margin-top:6px;
+}
+.st-actions{display:flex; gap:8px; padding-top:10px}
+.st-actions button{flex:1; padding:15px 0; font-size:14.5px; font-weight:600; border:1px solid}
+.again{border-color:var(--rule); color:var(--mist); background:#fff}
+.got{border-color:var(--sumi); background:var(--sumi); color:var(--paper)}
+.st-done{text-align:center; padding:64px 10px}
+.st-done b{display:block; font-family:var(--serif); font-size:44px; margin-bottom:10px}
+
+/* ---------- setup / settings ---------- */
+.pane{
+  max-width:520px; margin:0 auto;
+  padding:calc(env(safe-area-inset-top,0px) + 36px) 22px calc(40px + var(--safe-b));
+}
+.pane h1{
+  font-family:var(--serif); font-weight:400; font-size:31px; line-height:1.28;
+  margin:12px 0 10px; letter-spacing:.02em;
+}
+.pane p{font-size:14.5px; color:var(--mist); margin:0 0 14px}
+.pane label{display:block; margin:20px 0 6px; font-size:12px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--sage); font-weight:700}
+.pane input[type=text],.pane input[type=password]{
+  width:100%; font:inherit; font-size:15px; padding:11px 12px; background:#fff;
+  border:1px solid var(--rule); border-radius:0; color:var(--sumi);
+}
+.pane .go{
+  width:100%; margin-top:18px; padding:14px; background:var(--sumi); color:var(--paper);
+  font-size:15px; font-weight:600; letter-spacing:.03em;
+}
+.pane .go[disabled]{opacity:.4}
+.pane .ghost{
+  width:100%; margin-top:9px; padding:12px; border:1px solid var(--rule);
+  color:var(--mist); font-size:13.5px; background:#fff;
+}
+.pane .danger{color:var(--shu); border-color:rgba(196,51,29,.4)}
+.note{font-size:12.5px; color:var(--sage); line-height:1.65; margin-top:12px}
+.msg{margin-top:16px; padding:12px 13px; font-size:13.5px; line-height:1.6; border-left:2px solid}
+.msg.err{border-color:var(--shu); background:rgba(196,51,29,.06); color:#8C2716}
+.msg.ok{border-color:var(--sage); background:rgba(138,154,130,.1); color:#4E5A48}
+.bars{margin-top:20px}
+.bars .track{height:2px; background:var(--rule); overflow:hidden}
+.bars .fill{height:100%; background:var(--shu); width:0; transition:width .3s ease}
+.bars .lbl{font-size:12px; color:var(--mist); margin-top:8px; letter-spacing:.02em}
+.stat{display:flex; gap:16px; margin:18px 0 4px; padding:14px 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule)}
+.stat div{flex:1}
+.stat b{display:block; font-family:var(--serif); font-size:25px; font-weight:400}
+.stat span{font-size:10.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--sage)}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s !important; transition-duration:.001s !important}
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#15150F; --sumi:#EDEAE0; --rule:#33322A; --faint:#232219;
+    --mist:#9A978B; --sage:#6E7C67; --shu:#E0654B;
+  }
+  .cell{background:var(--paper)} .cell.st-known{background:#1D1C14}
+  #search,#filter,.pane input,.markbtn,.again,.pane .ghost{background:#1D1C14}
+  .square{background:#1B1A13}
+  #launch button,.got{background:var(--sumi); color:var(--paper)}
+  .wk-reading{background:var(--sumi); color:var(--paper)}
+  .wk-radical{color:#68A6CE} .wk-vocabulary{color:#A98BD4}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<div id="setup" class="pane">
+  <div class="eyebrow">教育漢字 · Kyōiku Kanji</div>
+  <h1>Grade&nbsp;1–3 kanji,<br>with your WaniKani mnemonics.</h1>
+  <p>440 characters from the Japanese school curriculum. Paste a WaniKani API token and this page pulls your meanings, readings and mnemonics once, then works offline.</p>
+
+  <label for="tok">WaniKani API token</label>
+  <input id="tok" type="password" inputmode="text" autocomplete="off"
+         autocapitalize="none" autocorrect="off" spellcheck="false"
+         placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+  <button class="go" id="syncBtn">Download my kanji</button>
+  <button class="ghost" id="importBtn">Load from a backup file instead</button>
+  <input id="importFile" type="file" accept="application/json,.json" multiple class="hidden">
+
+  <div class="bars hidden" id="prog">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <div class="lbl" id="progLbl">Starting…</div>
+  </div>
+  <div id="setupMsg"></div>
+
+  <p class="note">Read-only tokens work fine. Get one from wanikani.com → Settings → API Tokens. The token is stored only on this device and is sent only to wanikani.com.</p>
+</div>
+
+<!-- ============ BROWSE ============ -->
+<div id="app" class="hidden">
+  <header id="bar">
+    <div class="bar-top">
+      <span class="wordmark">教育漢字</span>
+      <span class="eyebrow" id="tally"></span>
+      <button id="gearBtn" aria-label="Settings">⚙</button>
+    </div>
+    <nav id="grades" role="tablist">
+      <button role="tab" data-g="1" aria-selected="true">一年<small>Grade 1</small></button>
+      <button role="tab" data-g="2" aria-selected="false">二年<small>Grade 2</small></button>
+      <button role="tab" data-g="3" aria-selected="false">三年<small>Grade 3</small></button>
+    </nav>
+    <div class="tools">
+      <input id="search" type="search" placeholder="Search kanji, meaning or reading"
+             autocapitalize="none" autocorrect="off" spellcheck="false">
+      <select id="filter">
+        <option value="all">All</option>
+        <option value="new">Unseen</option>
+        <option value="learning">Learning</option>
+        <option value="known">Known</option>
+      </select>
+    </div>
+  </header>
+  <main><div id="grid"></div></main>
+  <div id="launch">
+    <button id="studyBtn">Study this grade</button>
+  </div>
+</div>
+
+<!-- ============ STUDY ============ -->
+<div id="study" class="hidden">
+  <div class="st-head">
+    <button id="stQuit">✕ &nbsp;End session</button>
+    <span class="st-count" id="stCount"></span>
+  </div>
+  <div class="st-body" id="stBody"></div>
+  <div class="st-actions hidden" id="stActions">
+    <button class="again" id="stAgain">Not yet</button>
+    <button class="got" id="stGot">Got it</button>
+  </div>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="settings" class="pane hidden">
+  <div class="eyebrow">Settings</div>
+  <h1>Your data</h1>
+  <div class="stat">
+    <div><b id="sKanji">0</b><span>Kanji</span></div>
+    <div><b id="sKnown">0</b><span>Known</span></div>
+    <div><b id="sLearn">0</b><span>Learning</span></div>
+  </div>
+  <p id="syncedAt" class="note"></p>
+  <button class="ghost" id="resyncBtn">Re-download from WaniKani</button>
+  <button class="ghost" id="exportBtn">Save a backup file</button>
+  <button class="ghost" id="importBtn2">Load a backup file</button>
+  <button class="ghost danger" id="resetProg">Reset my progress</button>
+  <button class="ghost danger" id="forgetTok">Forget token &amp; data</button>
+  <div id="setMsg"></div>
+  <button class="go" id="backBtn" style="margin-top:26px">Back to kanji</button>
+  <p class="note" id="storeNote"></p>
+</div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   Kyōiku kanji, grades 1–3 (public curriculum list — not WaniKani data)
+   ===================================================================== */
+const GRADES = {
+ 1:"一右雨円王音下火花貝学気九休玉金空月犬見五口校左三山子四糸字耳七車手十出女小上森人水正生青夕石赤千川先早草足村大男竹中虫町天田土二日入年白八百文木本名目立力林六",
+ 2:"引羽雲園遠何科夏家歌画回会海絵外角楽活間丸岩顔汽記帰弓牛魚京強教近兄形計元言原戸古午後語工公広交光考行高黄合谷国黒今才細作算止市矢姉思紙寺自時室社弱首秋週春書少場色食心新親図数西声星晴切雪船線前組走多太体台地池知茶昼長鳥朝直通弟店点電刀冬当東答頭同道読内南肉馬売買麦半番父風分聞米歩母方北毎妹万明鳴毛門夜野友用曜来里理話",
+ 3:"悪安暗医委意育員院飲運泳駅央横屋温化荷界開階寒感漢館岸起期客究急級宮球去橋業曲局銀区苦具君係軽血決研県庫湖向幸港号根祭皿仕死使始指歯詩次事持式実写者主守取酒受州拾終習集住重宿所暑助昭消商章勝乗植申身神真深進世整昔全相送想息速族他打対待代第題炭短談着注柱丁帳調追定庭笛鉄転都度投豆島湯登等動童農波配倍箱畑発反坂板皮悲美鼻筆氷表秒病品負部服福物平返勉放味命面問役薬由油有遊予羊洋葉陽様落流旅両緑礼列練路和"
+};
+const GRADE_OF = {};
+for (const g of [1,2,3]) for (const ch of GRADES[g]) GRADE_OF[ch] = +g;
+
+const WK_API = "https://api.wanikani.com/v2";
+const WK_REV = "20170710";
+
+/* =====================================================================
+   Storage — IndexedDB, degrading to memory if the browser blocks it
+   ===================================================================== */
+const Store = (() => {
+  let db = null, mem = new Map(), ok = false;
+  function open(){
+    return new Promise(res => {
+      let req;
+      try { req = indexedDB.open("kyoiku-kanji", 1); }
+      catch(e){ return res(false); }
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains("kv")) d.createObjectStore("kv");
+      };
+      req.onsuccess = () => { db = req.result; ok = true; res(true); };
+      req.onerror   = () => res(false);
+      req.onblocked = () => res(false);
+      setTimeout(() => { if (!ok) res(false); }, 3000);
+    });
+  }
+  function tx(mode){ return db.transaction("kv", mode).objectStore("kv"); }
+  return {
+    async init(){ ok = await open(); return ok; },
+    get persistent(){ return ok; },
+    async get(k){
+      if (!ok) return mem.has(k) ? mem.get(k) : null;
+      return new Promise(res => {
+        try{
+          const r = tx("readonly").get(k);
+          r.onsuccess = () => res(r.result === undefined ? null : r.result);
+          r.onerror   = () => res(null);
+        } catch(e){ res(null); }
+      });
+    },
+    async set(k, v){
+      mem.set(k, v);
+      if (!ok) return false;
+      return new Promise(res => {
+        try{
+          const r = tx("readwrite").put(v, k);
+          r.onsuccess = () => res(true);
+          r.onerror   = () => res(false);
+        } catch(e){ res(false); }
+      });
+    },
+    async del(k){
+      mem.delete(k);
+      if (!ok) return;
+      try { tx("readwrite").delete(k); } catch(e){}
+    }
+  };
+})();
+
+/* =====================================================================
+   App state
+   ===================================================================== */
+let DATA = null;                 // {kanji:[...], syncedAt, source}
+let PROG = {};                   // char -> {box, due, seen}
+let BY_CHAR = new Map();
+let curGrade = 1, curFilter = "all", curQuery = "";
+
+const fileOrigin = () => location.protocol === "file:";
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* WaniKani wraps referenced items in custom tags. Escape everything first,
+   then re-open only the tags we know, so their markup can't inject HTML. */
+const WK_TAGS = ["radical","kanji","vocabulary","reading","meaning","ja"];
+function mn(text){
+  if (!text) return "";
+  let s = esc(text);
+  for (const t of WK_TAGS){
+    s = s.split(`&lt;${t}&gt;`).join(`<span class="wk-${t}">`)
+         .split(`&lt;/${t}&gt;`).join("</span>");
+  }
+  return s;
+}
+
+/* =====================================================================
+   Sync from WaniKani
+   ===================================================================== */
+function setProgress(pct, label){
+  $("#prog").classList.remove("hidden");
+  $("#fill").style.width = Math.max(2, Math.min(100, pct)) + "%";
+  $("#progLbl").textContent = label;
+}
+function say(where, cls, html){
+  $(where).innerHTML = `<div class="msg ${cls}">${html}</div>`;
+}
+
+function isNetworkFail(e){
+  return (e instanceof TypeError) ||
+         /load failed|failed to fetch|networkerror|cors|connection/i.test(e && e.message || "");
+}
+
+async function wkGet(url, token){
+  const res = await fetch(url, {
+    headers: { "Authorization": "Bearer " + token, "Wanikani-Revision": WK_REV }
+  });
+  if (res.status === 401) throw new Error("AUTH");
+  if (res.status === 429){
+    await new Promise(r => setTimeout(r, 12000));
+    return wkGet(url, token);
+  }
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+async function fetchAll(type, token, onPage){
+  let url = `${WK_API}/subjects?types=${type}`, out = [], page = 0;
+  while (url){
+    const body = await wkGet(url, token);
+    out = out.concat(body.data || []);
+    url = (body.pages || {}).next_url;
+    onPage(++page, out.length);
+  }
+  return out;
+}
+
+async function sync(token){
+  const need = new Set(Object.keys(GRADE_OF));
+
+  setProgress(8, "Contacting WaniKani…");
+  const rawKanji = await fetchAll("kanji", token,
+    (p, n) => setProgress(8 + p * 22, `Reading kanji… ${n} so far`));
+
+  setProgress(58, "Reading radicals…");
+  const rawRads = await fetchAll("radical", token,
+    (p, n) => setProgress(58 + p * 12, `Reading radicals… ${n} so far`));
+
+  const radMap = new Map();
+  for (const r of rawRads){
+    const d = r.data;
+    const name = (d.meanings || []).find(m => m.primary)?.meaning || d.slug || "?";
+    radMap.set(r.id, { c: d.characters || null, n: name });
+  }
+
+  setProgress(86, "Matching the grade lists…");
+  const pick = v => (v || []).filter(x => x.accepted_answer !== false)
+                             .sort((a,b) => (b.primary?1:0) - (a.primary?1:0));
+  const kanji = [];
+  for (const s of rawKanji){
+    const d = s.data, ch = d.characters;
+    if (!ch || !need.has(ch)) continue;
+    kanji.push({
+      c: ch,
+      g: GRADE_OF[ch],
+      lv: d.level || 0,
+      m: pick(d.meanings).map(x => x.meaning),
+      on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
+      kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
+      p:  (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean),
+      mm: d.meaning_mnemonic || "",
+      mh: d.meaning_hint || "",
+      rm: d.reading_mnemonic || "",
+      rh: d.reading_hint || "",
+      u:  d.document_url || ""
+    });
+  }
+  if (!kanji.length) throw new Error("EMPTY");
+
+  setProgress(96, "Saving to this device…");
+  DATA = { kanji, syncedAt: new Date().toISOString(), source: "WaniKani API" };
+  await Store.set("data", DATA);
+  await Store.set("token", token);
+  setProgress(100, `Saved ${kanji.length} kanji.`);
+  return kanji.length;
+}
+
+/* =====================================================================
+   Progress model — a small Leitner ladder
+   ===================================================================== */
+const DAYS = [0, 1, 3, 7, 21, 60];   // box -> interval in days
+const now = () => Date.now();
+function state(ch){
+  const p = PROG[ch];
+  if (!p || !p.seen) return "new";
+  return p.box >= 4 ? "known" : "learning";
+}
+function grade(ch, good){
+  const p = PROG[ch] || { box:0, seen:0, due:0 };
+  p.seen = 1;
+  p.box  = good ? Math.min(5, p.box + 1) : 0;
+  p.due  = now() + DAYS[p.box] * 864e5;
+  PROG[ch] = p;
+  Store.set("prog", PROG);
+}
+function toggleKnown(ch){
+  const p = PROG[ch] || { box:0, seen:0, due:0 };
+  const wasKnown = state(ch) === "known";
+  p.seen = 1;
+  p.box = wasKnown ? 0 : 5;
+  p.due = now() + DAYS[p.box] * 864e5;
+  PROG[ch] = p;
+  Store.set("prog", PROG);
+  return !wasKnown;
+}
+
+/* =====================================================================
+   Browse
+   ===================================================================== */
+function visible(){
+  const q = curQuery.trim().toLowerCase();
+  return DATA.kanji.filter(k => {
+    if (k.g !== curGrade && !q) return false;
+    if (q){
+      const hay = k.c + " " + k.m.join(" ").toLowerCase() + " " +
+                  k.on.join(" ") + " " + k.kun.join(" ");
+      if (!hay.includes(q)) return false;
+    }
+    if (curFilter !== "all" && state(k.c) !== curFilter) return false;
+    return true;
+  });
+}
+
+function renderGrid(){
+  const list = visible(), grid = $("#grid");
+  if (!list.length){
+    grid.style.border = "none";
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
+      <b>Nothing here</b>${curQuery ? "Try a different search." : "Change the filter to see more kanji."}</div>`;
+  } else {
+    grid.style.border = "";
+    grid.innerHTML = list.map((k, i) => {
+      const st = state(k.c);
+      return `<button class="cell st-${st}"
+        style="animation-delay:${Math.min(i,40)*8}ms" data-c="${esc(k.c)}"
+        aria-label="${esc(k.c)} — ${esc(k.m[0]||"")}">
+        <span>${esc(k.c)}</span><i class="lvl">${k.lv || ""}</i></button>`;
+    }).join("");
+  }
+  const inGrade = DATA.kanji.filter(k => k.g === curGrade);
+  const known = inGrade.filter(k => state(k.c) === "known").length;
+  $("#tally").textContent = `${known} / ${inGrade.length} known`;
+  const due = queue().length;
+  $("#studyBtn").textContent = due ? `Study this grade · ${due} ready` : "Nothing due — review anyway";
+}
+
+/* =====================================================================
+   Detail sheet
+   ===================================================================== */
+function openSheet(ch){
+  const k = BY_CHAR.get(ch);
+  if (!k) return;
+  const scrim = document.createElement("div");
+  scrim.className = "scrim";
+  const sheet = document.createElement("div");
+  sheet.className = "sheet";
+  sheet.setAttribute("role","dialog");
+  sheet.setAttribute("aria-label", k.m[0] || ch);
+  sheet.innerHTML = detailHTML(k, true);
+  document.body.append(scrim, sheet);
+  document.body.style.overflow = "hidden";
+
+  const close = () => {
+    scrim.remove(); sheet.remove();
+    document.body.style.overflow = "";
+    renderGrid();
+  };
+  scrim.onclick = close;
+  sheet.querySelector("[data-close]").onclick = close;
+  const mk = sheet.querySelector(".markbtn");
+  mk.onclick = () => {
+    const isKnown = toggleKnown(ch);
+    mk.classList.toggle("on", isKnown);
+    mk.textContent = isKnown ? "Known ✓" : "Mark as known";
+  };
+}
+
+function detailHTML(k, withHead){
+  const isKnown = state(k.c) === "known";
+  const parts = k.p.length
+    ? k.p.map(p => p.c ? `<span class="pc">${esc(p.c)}</span> <em>${esc(p.n)}</em>`
+                       : `<em>${esc(p.n)}</em>`).join(" &nbsp;+&nbsp; ")
+    : "";
+  return `
+  ${withHead ? `<div class="sheet-head">
+      <span class="eyebrow">Grade ${k.g} · WaniKani level ${k.lv}</span>
+      <button data-close aria-label="Close">✕</button></div>` : ""}
+  <div class="square"><b>${esc(k.c)}</b></div>
+  <div class="glosses">${esc(k.m.join(", "))}</div>
+  <div class="readings">
+    ${k.on.length  ? `<i><span class="eyebrow">On</span>${esc(k.on.join("、"))}</i>` : ""}
+    ${k.kun.length ? `<i><span class="eyebrow">Kun</span>${esc(k.kun.join("、"))}</i>` : ""}
+  </div>
+  ${parts ? `<div class="parts">${parts}</div>` : ""}
+  ${k.mm ? `<section class="mn"><span class="eyebrow">Meaning</span>
+      <p>${mn(k.mm)}</p>
+      ${k.mh ? `<div class="hint">${mn(k.mh)}</div>` : ""}</section>` : ""}
+  ${k.rm ? `<section class="mn"><span class="eyebrow">Reading</span>
+      <p>${mn(k.rm)}</p>
+      ${k.rh ? `<div class="hint">${mn(k.rh)}</div>` : ""}</section>` : ""}
+  ${withHead ? `<div class="srcline">
+      <span>Mnemonics from your WaniKani account</span>
+      ${k.u ? `<a href="${esc(k.u)}" target="_blank" rel="noopener">Open ↗</a>` : ""}
+      <button class="markbtn ${isKnown ? "on" : ""}">${isKnown ? "Known ✓" : "Mark as known"}</button>
+    </div>` : ""}`;
+}
+
+/* =====================================================================
+   Study session
+   ===================================================================== */
+let session = [], sIdx = 0, revealed = false;
+
+function queue(){
+  const t = now();
+  return DATA.kanji
+    .filter(k => k.g === curGrade)
+    .filter(k => { const p = PROG[k.c]; return !p || !p.seen || p.due <= t; });
+}
+
+function startStudy(){
+  let q = queue();
+  if (!q.length) q = DATA.kanji.filter(k => k.g === curGrade);
+  for (let i = q.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [q[i], q[j]] = [q[j], q[i]];
+  }
+  session = q.slice(0, 30); sIdx = 0;
+  $("#app").classList.add("hidden");
+  $("#study").classList.remove("hidden");
+  showCard();
+}
+
+function showCard(){
+  if (sIdx >= session.length){
+    $("#stActions").classList.add("hidden");
+    $("#stBody").classList.remove("front");
+    $("#stCount").textContent = "";
+    $("#stBody").innerHTML =
+      `<div class="st-done"><b>おつかれさま</b>
+       <p style="color:var(--mist);font-size:14.5px">
+       ${session.length} card${session.length===1?"":"s"} reviewed.</p></div>`;
+    return;
+  }
+  revealed = false;
+  const k = session[sIdx];
+  $("#stCount").textContent = `${sIdx + 1} / ${session.length}`;
+  $("#stActions").classList.add("hidden");
+  $("#stBody").classList.add("front");
+  $("#stBody").innerHTML =
+    `<div class="square"><b>${esc(k.c)}</b></div>
+     <div class="st-tap">Tap to reveal</div>`;
+  $("#stBody").onclick = reveal;
+}
+
+function reveal(){
+  if (revealed) return;
+  revealed = true;
+  const k = session[sIdx];
+  $("#stBody").onclick = null;
+  $("#stBody").classList.remove("front");
+  $("#stBody").innerHTML = detailHTML(k, false);
+  $("#stBody").scrollTop = 0;
+  $("#stActions").classList.remove("hidden");
+}
+
+function answer(good){
+  if (!revealed){ reveal(); return; }
+  grade(session[sIdx].c, good);
+  sIdx++;
+  showCard();
+}
+
+/* =====================================================================
+   Import / export
+   ===================================================================== */
+function exportBackup(){
+  const blob = new Blob([JSON.stringify({ data: DATA, prog: PROG }, null, 0)],
+                        { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `kyoiku-kanji-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* Accepts, in any combination and any number of files:
+   - a backup saved by this page
+   - .wk_cache.json from the companion Python script
+   - raw WaniKani /subjects responses (e.g. saved by an iOS Shortcut) */
+function subjectsToKanji(subs, radEntries){
+  const radMap = new Map(radEntries || []);
+  for (const s of subs){
+    if (s.object !== "radical" || !s.data) continue;
+    const d = s.data;
+    const name = (d.meanings || []).find(m => m.primary)?.meaning || d.slug || "?";
+    radMap.set(s.id, { c: d.characters || null, n: name });
+  }
+  const pick = v => (v || []).filter(x => x.accepted_answer !== false)
+                             .sort((a,b) => (b.primary?1:0) - (a.primary?1:0));
+  const seen = new Set(), out = [];
+  for (const s of subs){
+    if (s.object && s.object !== "kanji") continue;
+    const d = s.data, ch = d && d.characters;
+    if (!ch || !(ch in GRADE_OF) || seen.has(ch)) continue;
+    seen.add(ch);
+    out.push({
+      c: ch, g: GRADE_OF[ch], lv: d.level || 0,
+      m: pick(d.meanings).map(x => x.meaning),
+      on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
+      kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
+      p: (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean),
+      mm: d.meaning_mnemonic || "", mh: d.meaning_hint || "",
+      rm: d.reading_mnemonic || "", rh: d.reading_hint || "",
+      u: d.document_url || ""
+    });
+  }
+  return out;
+}
+
+async function importFiles(files, msgTarget){
+  let backup = null, prog = null, subs = [], radEntries = [];
+  for (const f of files){
+    let blob;
+    try { blob = JSON.parse(await f.text()); }
+    catch(e){ return say(msgTarget, "err", `“${esc(f.name)}” isn’t valid JSON.`); }
+
+    if (blob && blob.data && Array.isArray(blob.data.kanji)){
+      backup = blob.data;
+      if (blob.prog) prog = blob.prog;
+    } else if (blob && Array.isArray(blob.kanji) && blob.radicals){
+      subs = subs.concat(blob.kanji);
+      radEntries = radEntries.concat(Object.entries(blob.radicals)
+        .map(([id, r]) => [+id, { c: r.character || null, n: r.name }]));
+    } else if (blob && Array.isArray(blob.data)){
+      subs = subs.concat(blob.data);
+    } else if (Array.isArray(blob)){
+      subs = subs.concat(blob);
+    } else {
+      return say(msgTarget, "err",
+        `Couldn’t read “${esc(f.name)}”. Use a backup from this page, the Python script’s <code>.wk_cache.json</code>, or a saved WaniKani subjects response.`);
+    }
+  }
+
+  if (backup){
+    DATA = backup;
+    if (prog){ PROG = prog; await Store.set("prog", PROG); }
+  } else {
+    const kanji = subjectsToKanji(subs, radEntries);
+    if (!kanji.length)
+      return say(msgTarget, "err",
+        "Those files loaded, but held no grade 1–3 kanji. If you saved WaniKani pages, make sure you included the kanji pages, not only radicals.");
+    DATA = { kanji, syncedAt: new Date().toISOString(), source: "Imported file" };
+  }
+  await Store.set("data", DATA);
+  enterApp();
+}
+
+/* =====================================================================
+   Views & wiring
+   ===================================================================== */
+function enterApp(){
+  BY_CHAR = new Map(DATA.kanji.map(k => [k.c, k]));
+  $("#setup").classList.add("hidden");
+  $("#settings").classList.add("hidden");
+  $("#study").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  renderGrid();
+}
+
+function openSettings(){
+  const known = DATA.kanji.filter(k => state(k.c) === "known").length;
+  const learn = DATA.kanji.filter(k => state(k.c) === "learning").length;
+  $("#sKanji").textContent = DATA.kanji.length;
+  $("#sKnown").textContent = known;
+  $("#sLearn").textContent = learn;
+  const d = DATA.syncedAt ? new Date(DATA.syncedAt) : null;
+  $("#syncedAt").textContent = d
+    ? `Loaded ${d.toLocaleDateString()} from ${DATA.source}.`
+    : "";
+  $("#storeNote").textContent = Store.persistent
+    ? "Saved on this device. Nothing is uploaded anywhere."
+    : "This browser is blocking local storage, so progress will vanish when you close the tab. Save a backup file to keep it.";
+  $("#setMsg").innerHTML = "";
+  $("#app").classList.add("hidden");
+  $("#settings").classList.remove("hidden");
+}
+
+function wire(){
+  // --- setup
+  $("#syncBtn").onclick = async () => {
+    const token = $("#tok").value.trim();
+    if (!token) return say("#setupMsg", "err", "Paste your API token first.");
+    $("#syncBtn").disabled = true;
+    $("#setupMsg").innerHTML = "";
+    try {
+      const n = await sync(token);
+      say("#setupMsg", "ok", `Got ${n} kanji. Opening…`);
+      setTimeout(enterApp, 500);
+    } catch (err){
+      $("#prog").classList.add("hidden");
+      $("#syncBtn").disabled = false;
+      if (err.message === "AUTH"){
+        say("#setupMsg", "err", "WaniKani rejected that token. Check for stray spaces, or make a new one in Settings → API Tokens.");
+      } else if (err.message === "EMPTY"){
+        say("#setupMsg", "err", "Connected, but no grade 1–3 kanji came back. Is this token attached to a WaniKani account with subject access?");
+      } else if (isNetworkFail(err)){
+        say("#setupMsg", "err", fileOrigin()
+          ? "Blocked by the browser, not by WaniKani. A page opened straight from storage isn’t allowed to contact wanikani.com. Put this file on a web address, or load a data file with the button above."
+          : "Couldn’t reach WaniKani. Check your connection and try again.");
+      } else {
+        say("#setupMsg", "err", "WaniKani returned an error: " + esc(err.message));
+      }
+    }
+  };
+  $("#importBtn").onclick  = () => { $("#importFile").dataset.t = "#setupMsg"; $("#importFile").click(); };
+  $("#importBtn2").onclick = () => { $("#importFile").dataset.t = "#setMsg";   $("#importFile").click(); };
+  $("#importFile").onchange = e => {
+    const fs = Array.from(e.target.files || []);
+    if (fs.length) importFiles(fs, e.target.dataset.t || "#setupMsg");
+    e.target.value = "";
+  };
+
+  // --- browse
+  $$("#grades button").forEach(b => b.onclick = () => {
+    $$("#grades button").forEach(x => x.setAttribute("aria-selected", x === b));
+    curGrade = +b.dataset.g;
+    window.scrollTo(0, 0);
+    renderGrid();
+  });
+  $("#grid").onclick = e => {
+    const c = e.target.closest(".cell");
+    if (c) openSheet(c.dataset.c);
+  };
+  let t;
+  $("#search").oninput = e => {
+    clearTimeout(t);
+    t = setTimeout(() => { curQuery = e.target.value; renderGrid(); }, 140);
+  };
+  $("#filter").onchange = e => { curFilter = e.target.value; renderGrid(); };
+  $("#studyBtn").onclick = startStudy;
+  $("#gearBtn").onclick = openSettings;
+
+  // --- study
+  $("#stQuit").onclick  = () => { $("#study").classList.add("hidden"); enterApp(); };
+  $("#stGot").onclick   = () => answer(true);
+  $("#stAgain").onclick = () => answer(false);
+  document.addEventListener("keydown", e => {
+    if ($("#study").classList.contains("hidden")) return;
+    if (e.key === " " || e.key === "Enter"){ e.preventDefault(); revealed ? answer(true) : reveal(); }
+    if (e.key === "1") answer(false);
+    if (e.key === "2") answer(true);
+    if (e.key === "Escape") $("#stQuit").click();
+  });
+
+  // --- settings
+  $("#backBtn").onclick   = enterApp;
+  $("#exportBtn").onclick = exportBackup;
+  $("#resyncBtn").onclick = async () => {
+    const tok = await Store.get("token");
+    $("#settings").classList.add("hidden");
+    $("#setup").classList.remove("hidden");
+    if (tok) $("#tok").value = tok;
+    $("#setupMsg").innerHTML = "";
+    $("#prog").classList.add("hidden");
+  };
+  $("#resetProg").onclick = async () => {
+    if (!confirm("Reset progress for all 440 kanji? Your downloaded mnemonics stay.")) return;
+    PROG = {}; await Store.set("prog", PROG);
+    say("#setMsg", "ok", "Progress reset.");
+    openSettings();
+  };
+  $("#forgetTok").onclick = async () => {
+    if (!confirm("Delete the token, the downloaded kanji and your progress from this device?")) return;
+    await Store.del("token"); await Store.del("data"); await Store.del("prog");
+    DATA = null; PROG = {};
+    $("#settings").classList.add("hidden");
+    $("#setup").classList.remove("hidden");
+    $("#tok").value = "";
+    say("#setupMsg", "ok", "Everything cleared from this device.");
+  };
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+(async function boot(){
+  await Store.init();
+  wire();
+  const [d, p, tok] = await Promise.all([
+    Store.get("data"), Store.get("prog"), Store.get("token")
+  ]);
+  PROG = p || {};
+  if (tok) $("#tok").value = tok;
+  if (d && d.kanji && d.kanji.length){ DATA = d; enterApp(); return; }
+  if (fileOrigin()){
+    $("#syncBtn").disabled = true;
+    say("#setupMsg", "err",
+      "<b>Downloading won’t work from here.</b> You’ve opened this page from a file, and phone browsers don’t let such a page contact wanikani.com. Put the file on a web address and open that, or load a data file below.");
+  }
+})();
+</script>
+</body>
+</html>
