@@ -181,6 +181,10 @@ main{padding:0 14px calc(96px + var(--safe-b))}
 section.mn{margin-top:20px}
 section.mn .eyebrow{display:block; margin-bottom:7px}
 section.mn p{margin:0; font-size:15.5px; line-height:1.72}
+section.mn.radmn{
+  border-left:2px solid var(--rule); padding-left:12px; margin-top:14px;
+}
+section.mn.radmn p{font-size:14.5px; color:var(--mist)}
 section.mn .hint{
   margin-top:9px; font-size:13.5px; color:var(--mist);
   border-left:2px solid var(--rule); padding-left:10px;
@@ -571,12 +575,17 @@ async function sync(token){
   const rawRads = await fetchAll("radical", token,
     (p, n) => setProgress(58 + p * 12, `Reading radicals… ${n} so far`));
 
-  const radMap = new Map();
+  const radMap = new Map(), radByChar = new Map();
   for (const r of rawRads){
     const d = r.data;
     if (d.hidden_at) continue;          // retired radical
     const name = (d.meanings || []).find(m => m.primary)?.meaning || d.slug || "?";
     radMap.set(r.id, { c: d.characters || null, n: name });
+    // Many kanji are visually identical to a radical. WaniKani then writes
+    // the kanji mnemonic as a pointer ("same as the radical"), so keep the
+    // radical's own mnemonic to show alongside it.
+    if (d.characters && !radByChar.has(d.characters))
+      radByChar.set(d.characters, { n: name, mm: d.meaning_mnemonic || "" });
   }
 
   setProgress(86, "Matching the grade lists…");
@@ -602,6 +611,7 @@ async function sync(token){
       mh: d.meaning_hint || "",
       rm: d.reading_mnemonic || "",
       rh: d.reading_hint || "",
+      rad: radByChar.get(ch) || null,
       u:  d.document_url || ""
     });
   }
@@ -746,6 +756,9 @@ function detailHTML(k, withHead){
   ${k.mm ? `<section class="mn"><span class="eyebrow">Meaning</span>
       <p>${mn(k.mm)}</p>
       ${k.mh ? `<div class="hint">${mn(k.mh)}</div>` : ""}</section>` : ""}
+  ${k.rad && k.rad.mm ? `<section class="mn radmn">
+      <span class="eyebrow">Same radical &middot; ${esc(k.rad.n)}</span>
+      <p>${mn(k.rad.mm)}</p></section>` : ""}
   ${k.rm ? `<section class="mn"><span class="eyebrow">Reading</span>
       <p>${mn(k.rm)}</p>
       ${k.rh ? `<div class="hint">${mn(k.rh)}</div>` : ""}</section>` : ""}
@@ -917,7 +930,6 @@ function exportBackup(){
 
 /* Accepts, in any combination and any number of files:
    - a backup saved by this page
-   - .wk_cache.json from the companion Python script
    - raw WaniKani /subjects responses (e.g. saved by an iOS Shortcut) */
 function subjectsToKanji(subs, radEntries){
   const radMap = new Map(radEntries || []);
@@ -929,6 +941,14 @@ function subjectsToKanji(subs, radEntries){
   }
   const pick = v => (v || []).filter(x => x.accepted_answer !== false)
                              .sort((a,b) => (b.primary?1:0) - (a.primary?1:0));
+  const radByChar = new Map();
+  for (const s of subs){
+    if (s.object !== "radical" || !s.data) continue;
+    const d = s.data;
+    if (d.hidden_at || !d.characters || radByChar.has(d.characters)) continue;
+    const nm = (d.meanings || []).find(m => m.primary)?.meaning || d.slug || "?";
+    radByChar.set(d.characters, { n: nm, mm: d.meaning_mnemonic || "" });
+  }
   const seen = new Set(), out = [];
   for (const s of subs){
     if (s.object && s.object !== "kanji") continue;
@@ -943,6 +963,7 @@ function subjectsToKanji(subs, radEntries){
       p: (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean),
       mm: d.meaning_mnemonic || "", mh: d.meaning_hint || "",
       rm: d.reading_mnemonic || "", rh: d.reading_hint || "",
+      rad: radByChar.get(ch) || null,
       u: d.document_url || ""
     });
   }
@@ -969,7 +990,7 @@ async function importFiles(files, msgTarget){
       subs = subs.concat(blob);
     } else {
       return say(msgTarget, "err",
-        `Couldn’t read “${esc(f.name)}”. Use a backup from this page, the Python script’s <code>.wk_cache.json</code>, or a saved WaniKani subjects response.`);
+        `Couldn’t read “${esc(f.name)}”. Use a backup saved from this page, or a saved WaniKani subjects response.`);
     }
   }
 
