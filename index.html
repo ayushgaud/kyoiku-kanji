@@ -428,6 +428,7 @@ section.mn .hint{
   <p id="syncedAt" class="note"></p>
   <p id="diag" class="note"></p>
   <button class="ghost" id="resyncBtn">Re-download from WaniKani</button>
+  <button class="ghost" id="orderBtn"></button>
   <button class="ghost" id="exportBtn">Save a backup file</button>
   <button class="ghost" id="importBtn2">Load a backup file</button>
   <button class="ghost danger" id="resetProg">Reset my progress</button>
@@ -461,7 +462,7 @@ const GRADES = {
 const GRADE_OF = {};
 for (const g of [1,2,3]) for (const ch of GRADES[g]) GRADE_OF[ch] = +g;
 
-const BUILD = "2026-08-22e";
+const BUILD = "2026-08-23a";
 const WK_API = "https://api.wanikani.com/v2";
 const WK_REV = "20170710";
 
@@ -523,7 +524,8 @@ const Store = (() => {
    ===================================================================== */
 let DATA = null;                 // {kanji:[...], syncedAt, source}
 let PROGS = { read: {}, write: {} };   // per skill: char -> {box, due, seen}
-let skill = "read";                    // "read" = kanji->meaning, "write" = meaning->kanji
+let skill = "read";
+let order = "easy";              // "easy" = simplest first, or "random"                    // "read" = kanji->meaning, "write" = meaning->kanji
 const P = () => PROGS[skill];
 const STORE_KEY = { read: "prog", write: "progw" };
 let BY_CHAR = new Map();
@@ -737,9 +739,12 @@ function renderGrid(){
   const known = inGrade.filter(k => state(k.c) === "known").length;
   $("#tally").textContent =
     `${known} / ${inGrade.length} ${skill === "write" ? "writable" : "readable"}`;
-  const due = queue().length;
+  const n = buildSession().length;
   const verb = skill === "write" ? "Practise writing" : "Practise reading";
-  $("#studyBtn").textContent = due ? `${verb} · ${due} ready` : `${verb} — nothing due`;
+  const waiting = queue().length;
+  $("#studyBtn").textContent = waiting
+    ? `${verb} · ${n} card${n === 1 ? "" : "s"}`
+    : `${verb} — nothing due, revise anyway`;
 }
 
 /* =====================================================================
@@ -910,14 +915,54 @@ function queue(){
     .filter(k => { const p = P()[k.c]; return !p || !p.seen || p.due <= t; });
 }
 
-function startStudy(){
-  let q = queue();
-  if (!q.length) q = DATA.kanji.filter(k => k.g === curGrade);
-  for (let i = q.length - 1; i > 0; i--){
-    const j = Math.floor(Math.random() * (i + 1));
-    [q[i], q[j]] = [q[j], q[i]];
+/* Difficulty: WaniKani's own level is the best available ordering signal —
+   it already blends frequency with complexity. Stroke count breaks ties, and
+   matters most when you're writing rather than reading. */
+const strokeCount = k => (STROKES[k.c] || []).length;
+const difficulty  = k => (k.lv || 99) * 1000 + strokeCount(k);
+
+const MAX_CARDS = 30;   // per session
+const MAX_NEW   = 10;   // unseen kanji per session, so reviews aren't drowned
+
+function buildSession(){
+  const t = now(), bag = P();
+  const due = [], fresh = [];
+  for (const k of DATA.kanji){
+    if (k.g !== curGrade) continue;
+    const p = bag[k.c];
+    if (!p || !p.seen) fresh.push(k);
+    else if (p.due <= t) due.push(k);
   }
-  session = q.slice(0, 30); sIdx = 0;
+  if (order === "random"){
+    for (const arr of [due, fresh])
+      for (let i = arr.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+  } else {
+    due.sort((a,b) => difficulty(a) - difficulty(b));
+    fresh.sort((a,b) => difficulty(a) - difficulty(b));
+  }
+  // Due reviews claim the slots first; new kanji fill what's left, capped.
+  const picked = due.slice(0, MAX_CARDS);
+  for (const k of fresh){
+    if (picked.length >= MAX_CARDS) break;
+    if (picked.length - Math.min(due.length, MAX_CARDS) >= MAX_NEW) break;
+    picked.push(k);
+  }
+  // Nothing scheduled: let the whole grade be revised rather than refusing.
+  if (!picked.length){
+    const all = DATA.kanji.filter(k => k.g === curGrade);
+    if (order !== "random") all.sort((a,b) => difficulty(a) - difficulty(b));
+    return all.slice(0, MAX_CARDS);
+  }
+  // Ramp across the session as a whole, not just within each group.
+  if (order !== "random") picked.sort((a,b) => difficulty(a) - difficulty(b));
+  return picked;
+}
+
+function startStudy(){
+  session = buildSession(); sIdx = 0;
   $("#app").classList.add("hidden");
   $("#study").classList.remove("hidden");
   showCard();
@@ -1100,6 +1145,9 @@ function openSettings(){
   $("#storeNote").textContent = Store.persistent
     ? "Saved on this device. Nothing is uploaded anywhere."
     : "This browser is blocking local storage, so progress will vanish when you close the tab. Save a backup file to keep it.";
+  $("#orderBtn").textContent = order === "easy"
+    ? "Lesson order: simplest first"
+    : "Lesson order: random";
   $("#setMsg").innerHTML = "";
   $("#app").classList.add("hidden");
   $("#settings").classList.remove("hidden");
@@ -1179,6 +1227,11 @@ function wire(){
 
   // --- settings
   $("#backBtn").onclick   = enterApp;
+  $("#orderBtn").onclick = async () => {
+    order = order === "easy" ? "random" : "easy";
+    await Store.set("order", order);
+    openSettings();
+  };
   $("#exportBtn").onclick = exportBackup;
   $("#resyncBtn").onclick = async () => {
     const tok = await Store.get("token");
@@ -1214,9 +1267,11 @@ function wire(){
 (async function boot(){
   await Store.init();
   wire();
-  const [d, p, pw, tok] = await Promise.all([
-    Store.get("data"), Store.get("prog"), Store.get("progw"), Store.get("token")
+  const [d, p, pw, tok, ord] = await Promise.all([
+    Store.get("data"), Store.get("prog"), Store.get("progw"),
+    Store.get("token"), Store.get("order")
   ]);
+  if (ord === "random" || ord === "easy") order = ord;
   PROGS.read  = p  || {};
   PROGS.write = pw || {};
   if (tok) $("#tok").value = tok;
