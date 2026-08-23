@@ -74,9 +74,16 @@ nav#grades button small{display:block; font-family:var(--sans); font-size:9.5px;
 }
 #search::placeholder{color:#A9A79C}
 #filter{
-  font:inherit; font-size:12.5px; padding:7px 8px; background:#fff;
+  font:inherit; font-size:11.5px; padding:7px 4px; background:#fff;
   border:1px solid var(--rule); border-radius:0; color:var(--mist);
+  max-width:82px;
 }
+.seg{display:flex; border:1px solid var(--rule); flex:0 0 auto}
+.seg button{
+  font-family:var(--serif); font-size:15px; padding:5px 10px;
+  color:var(--mist); background:#fff; line-height:1.25;
+}
+.seg button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
 
 /* ---------- the manuscript grid ---------- */
 main{padding:0 14px calc(96px + var(--safe-b))}
@@ -210,10 +217,10 @@ section.mn .hint{
 .wk-meaning{background:var(--faint); padding:0 5px}
 
 /* ---------- stroke order ---------- */
-.sq-stroke{width:min(42vw,168px); margin:4px auto 12px}
 .stroke-svg{width:100%; height:100%; display:block}
+.sq-anim{cursor:pointer}
 .stroke-svg path{
-  fill:none; stroke:var(--sumi); stroke-width:4;
+  fill:none; stroke:var(--sumi); stroke-width:4.5;
   stroke-linecap:round; stroke-linejoin:round;
 }
 .stroke-svg path.ghost{stroke:var(--faint)}
@@ -258,6 +265,13 @@ section.mn .hint{
   overflow:hidden;
 }
 .st-body.front .square{width:min(64vw,270px); margin:0}
+.st-body.front .wprompt{
+  font-size:29px; font-weight:600; text-align:center; line-height:1.3;
+  margin-bottom:6px; padding:0 8px;
+}
+.st-body.front .readings{margin-bottom:22px}
+/* An empty square to write into — the guides are the whole point. */
+.square.blank b{display:none}
 .st-body.front .square b{font-size:min(46vw,196px)}
 .st-body.front .st-tap{margin-top:26px}
 .st-tap{
@@ -322,6 +336,8 @@ section.mn .hint{
   #search,#filter,.pane input,.markbtn,.again,.pane .ghost{background:#1D1C14}
   .square{background:#1B1A13}
   .step{background:#1B1A13} .replay{background:#1D1C14}
+  .seg button{background:#1D1C14}
+  .seg button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
   #launch button,.got{background:var(--sumi); color:var(--paper)}
   .wk-reading{background:var(--sumi); color:var(--paper)}
   .wk-radical{color:#68A6CE} .wk-vocabulary{color:#A98BD4}
@@ -369,6 +385,10 @@ section.mn .hint{
     <div class="tools">
       <input id="search" type="search" placeholder="Search kanji, meaning or reading"
              autocapitalize="none" autocorrect="off" spellcheck="false">
+      <div class="seg" id="skillSeg" role="tablist" aria-label="Practice direction">
+        <button role="tab" data-skill="read"  aria-selected="true">読</button>
+        <button role="tab" data-skill="write" aria-selected="false">書</button>
+      </div>
       <select id="filter">
         <option value="all">All</option>
         <option value="new">Unseen</option>
@@ -402,10 +422,11 @@ section.mn .hint{
   <h1>Your data</h1>
   <div class="stat">
     <div><b id="sKanji">0</b><span>Kanji</span></div>
-    <div><b id="sKnown">0</b><span>Known</span></div>
-    <div><b id="sLearn">0</b><span>Learning</span></div>
+    <div><b id="sKnown">0</b><span>Can read</span></div>
+    <div><b id="sLearn">0</b><span>Can write</span></div>
   </div>
   <p id="syncedAt" class="note"></p>
+  <p id="diag" class="note"></p>
   <button class="ghost" id="resyncBtn">Re-download from WaniKani</button>
   <button class="ghost" id="exportBtn">Save a backup file</button>
   <button class="ghost" id="importBtn2">Load a backup file</button>
@@ -440,6 +461,7 @@ const GRADES = {
 const GRADE_OF = {};
 for (const g of [1,2,3]) for (const ch of GRADES[g]) GRADE_OF[ch] = +g;
 
+const BUILD = "2026-08-22e";
 const WK_API = "https://api.wanikani.com/v2";
 const WK_REV = "20170710";
 
@@ -500,7 +522,10 @@ const Store = (() => {
    App state
    ===================================================================== */
 let DATA = null;                 // {kanji:[...], syncedAt, source}
-let PROG = {};                   // char -> {box, due, seen}
+let PROGS = { read: {}, write: {} };   // per skill: char -> {box, due, seen}
+let skill = "read";                    // "read" = kanji->meaning, "write" = meaning->kanji
+const P = () => PROGS[skill];
+const STORE_KEY = { read: "prog", write: "progw" };
 let BY_CHAR = new Map();
 let curGrade = 1, curFilter = "all", curQuery = "";
 
@@ -580,7 +605,7 @@ async function sync(token){
     const d = r.data;
     if (d.hidden_at) continue;          // retired radical
     const name = (d.meanings || []).find(m => m.primary)?.meaning || d.slug || "?";
-    radMap.set(r.id, { c: d.characters || null, n: name });
+    radMap.set(r.id, { c: d.characters || null, n: name, mm: d.meaning_mnemonic || "" });
     // Many kanji are visually identical to a radical. WaniKani then writes
     // the kanji mnemonic as a pointer ("same as the radical"), so keep the
     // radical's own mnemonic to show alongside it.
@@ -599,6 +624,8 @@ async function sync(token){
     // win, and BY_CHAR keeps the last write, so drop both cases here.
     if (d.hidden_at || taken.has(ch)) continue;
     taken.add(ch);
+    const parts = (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean);
+    const kanjiMeanings = pick(d.meanings).map(x => x.meaning);
     kanji.push({
       c: ch,
       g: GRADE_OF[ch],
@@ -606,12 +633,12 @@ async function sync(token){
       m: pick(d.meanings).map(x => x.meaning),
       on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
       kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
-      p:  (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean),
+      p:  parts,
       mm: d.meaning_mnemonic || "",
       mh: d.meaning_hint || "",
       rm: d.reading_mnemonic || "",
       rh: d.reading_hint || "",
-      rad: radByChar.get(ch) || null,
+      rad: twinRadical(ch, kanjiMeanings, parts, radByChar),
       u:  d.document_url || ""
     });
   }
@@ -625,32 +652,51 @@ async function sync(token){
   return kanji.length;
 }
 
+/* A kanji that is visually identical to a radical gets a pointer instead of a
+   mnemonic on WaniKani ("the radical and the kanji are the same thing"). Find
+   that radical so its own mnemonic can be shown. Matching by character covers
+   most; radicals drawn as images have no character, so fall back to a lone
+   component whose name matches one of the kanji's meanings. */
+function twinRadical(ch, meanings, parts, byChar){
+  const direct = byChar.get(ch);
+  if (direct && direct.mm) return { n: direct.n, mm: direct.mm };
+  if (parts.length === 1 && parts[0].mm){
+    const only = parts[0];
+    const names = new Set(meanings.map(m => String(m).toLowerCase()));
+    if (only.c === ch || names.has(String(only.n).toLowerCase()))
+      return { n: only.n, mm: only.mm };
+  }
+  return null;
+}
+
 /* =====================================================================
    Progress model — a small Leitner ladder
    ===================================================================== */
 const DAYS = [0, 1, 3, 7, 21, 60];   // box -> interval in days
 const now = () => Date.now();
-function state(ch){
-  const p = PROG[ch];
+function state(ch, which){
+  const p = PROGS[which || skill][ch];
   if (!p || !p.seen) return "new";
   return p.box >= 4 ? "known" : "learning";
 }
 function grade(ch, good){
-  const p = PROG[ch] || { box:0, seen:0, due:0 };
+  const bag = P();
+  const p = bag[ch] || { box:0, seen:0, due:0 };
   p.seen = 1;
   p.box  = good ? Math.min(5, p.box + 1) : 0;
   p.due  = now() + DAYS[p.box] * 864e5;
-  PROG[ch] = p;
-  Store.set("prog", PROG);
+  bag[ch] = p;
+  Store.set(STORE_KEY[skill], bag);
 }
 function toggleKnown(ch){
-  const p = PROG[ch] || { box:0, seen:0, due:0 };
+  const bag = P();
+  const p = bag[ch] || { box:0, seen:0, due:0 };
   const wasKnown = state(ch) === "known";
   p.seen = 1;
   p.box = wasKnown ? 0 : 5;
   p.due = now() + DAYS[p.box] * 864e5;
-  PROG[ch] = p;
-  Store.set("prog", PROG);
+  bag[ch] = p;
+  Store.set(STORE_KEY[skill], bag);
   return !wasKnown;
 }
 
@@ -689,9 +735,11 @@ function renderGrid(){
   }
   const inGrade = DATA.kanji.filter(k => k.g === curGrade);
   const known = inGrade.filter(k => state(k.c) === "known").length;
-  $("#tally").textContent = `${known} / ${inGrade.length} known`;
+  $("#tally").textContent =
+    `${known} / ${inGrade.length} ${skill === "write" ? "writable" : "readable"}`;
   const due = queue().length;
-  $("#studyBtn").textContent = due ? `Study this grade · ${due} ready` : "Nothing due — review anyway";
+  const verb = skill === "write" ? "Practise writing" : "Practise reading";
+  $("#studyBtn").textContent = due ? `${verb} · ${due} ready` : `${verb} — nothing due`;
 }
 
 /* =====================================================================
@@ -736,7 +784,10 @@ function detailHTML(k, withHead){
   ${withHead ? `<div class="sheet-head">
       <span class="eyebrow">Grade ${k.g} · WaniKani level ${k.lv}</span>
       <button data-close aria-label="Close">✕</button></div>` : ""}
-  <div class="square"><b>${esc(k.c)}</b></div>
+  <div class="square${STROKES[k.c] ? " sq-anim" : ""}">${STROKES[k.c]
+      ? `<svg class="stroke-svg" viewBox="0 0 109 109" data-anim="${esc(k.c)}"
+             aria-label="Stroke order for ${esc(k.c)}"></svg>`
+      : `<b>${esc(k.c)}</b>`}</div>
   <div class="glosses">${esc(k.m.join(", "))}</div>
   <div class="readings">
     ${k.on.length  ? `<i><span class="eyebrow">On</span>${esc(k.on.join("、"))}</i>` : ""}
@@ -749,8 +800,6 @@ function detailHTML(k, withHead){
         <button class="replay" data-replay>Animate</button>
         <span class="cnt">${STROKES[k.c].length} stroke${STROKES[k.c].length===1?"":"s"}</span>
       </div>
-      <div class="square sq-stroke"><svg class="stroke-svg" viewBox="0 0 109 109"
-           data-anim="${esc(k.c)}" aria-label="Stroke order for ${esc(k.c)}"></svg></div>
       <div class="steps" data-steps="${esc(k.c)}"></div>
     </section>` : ""}
   ${k.mm ? `<section class="mn"><span class="eyebrow">Meaning</span>
@@ -858,7 +907,7 @@ function queue(){
   const t = now();
   return DATA.kanji
     .filter(k => k.g === curGrade)
-    .filter(k => { const p = PROG[k.c]; return !p || !p.seen || p.due <= t; });
+    .filter(k => { const p = P()[k.c]; return !p || !p.seen || p.due <= t; });
 }
 
 function startStudy(){
@@ -890,9 +939,16 @@ function showCard(){
   $("#stCount").textContent = `${sIdx + 1} / ${session.length}`;
   $("#stActions").classList.add("hidden");
   $("#stBody").classList.add("front");
-  $("#stBody").innerHTML =
-    `<div class="square"><b>${esc(k.c)}</b></div>
-     <div class="st-tap">Tap to reveal</div>`;
+  $("#stBody").innerHTML = skill === "write"
+    ? `<div class="wprompt">${esc(k.m.join(", "))}</div>
+       <div class="readings">
+         ${k.on.length  ? `<i><span class="eyebrow">On</span>${esc(k.on.join("\u3001"))}</i>` : ""}
+         ${k.kun.length ? `<i><span class="eyebrow">Kun</span>${esc(k.kun.join("\u3001"))}</i>` : ""}
+       </div>
+       <div class="square blank"></div>
+       <div class="st-tap">Write it, then tap to check</div>`
+    : `<div class="square"><b>${esc(k.c)}</b></div>
+       <div class="st-tap">Tap to reveal</div>`;
   $("#stBody").onclick = reveal;
 }
 
@@ -919,7 +975,8 @@ function answer(good){
    Import / export
    ===================================================================== */
 function exportBackup(){
-  const blob = new Blob([JSON.stringify({ data: DATA, prog: PROG }, null, 0)],
+  const blob = new Blob([JSON.stringify(
+      { data: DATA, prog: PROGS.read, progw: PROGS.write }, null, 0)],
                         { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -937,7 +994,7 @@ function subjectsToKanji(subs, radEntries){
     if (s.object !== "radical" || !s.data) continue;
     const d = s.data;
     const name = (d.meanings || []).find(m => m.primary)?.meaning || d.slug || "?";
-    radMap.set(s.id, { c: d.characters || null, n: name });
+    radMap.set(s.id, { c: d.characters || null, n: name, mm: d.meaning_mnemonic || "" });
   }
   const pick = v => (v || []).filter(x => x.accepted_answer !== false)
                              .sort((a,b) => (b.primary?1:0) - (a.primary?1:0));
@@ -955,15 +1012,17 @@ function subjectsToKanji(subs, radEntries){
     const d = s.data, ch = d && d.characters;
     if (!ch || !(ch in GRADE_OF) || seen.has(ch) || d.hidden_at) continue;
     seen.add(ch);
+    const iparts = (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean);
+    const imeanings = pick(d.meanings).map(x => x.meaning);
     out.push({
       c: ch, g: GRADE_OF[ch], lv: d.level || 0,
       m: pick(d.meanings).map(x => x.meaning),
       on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
       kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
-      p: (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean),
+      p: iparts,
       mm: d.meaning_mnemonic || "", mh: d.meaning_hint || "",
       rm: d.reading_mnemonic || "", rh: d.reading_hint || "",
-      rad: radByChar.get(ch) || null,
+      rad: twinRadical(ch, imeanings, iparts, radByChar),
       u: d.document_url || ""
     });
   }
@@ -971,7 +1030,7 @@ function subjectsToKanji(subs, radEntries){
 }
 
 async function importFiles(files, msgTarget){
-  let backup = null, prog = null, subs = [], radEntries = [];
+  let backup = null, prog = null, progw = null, subs = [], radEntries = [];
   for (const f of files){
     let blob;
     try { blob = JSON.parse(await f.text()); }
@@ -979,7 +1038,8 @@ async function importFiles(files, msgTarget){
 
     if (blob && blob.data && Array.isArray(blob.data.kanji)){
       backup = blob.data;
-      if (blob.prog) prog = blob.prog;
+      if (blob.prog)  prog  = blob.prog;
+      if (blob.progw) progw = blob.progw;
     } else if (blob && Array.isArray(blob.kanji) && blob.radicals){
       subs = subs.concat(blob.kanji);
       radEntries = radEntries.concat(Object.entries(blob.radicals)
@@ -996,7 +1056,8 @@ async function importFiles(files, msgTarget){
 
   if (backup){
     DATA = backup;
-    if (prog){ PROG = prog; await Store.set("prog", PROG); }
+    if (prog){ PROGS.read = prog; await Store.set("prog", PROGS.read); }
+    if (progw){ PROGS.write = progw; await Store.set("progw", PROGS.write); }
   } else {
     const kanji = subjectsToKanji(subs, radEntries);
     if (!kanji.length)
@@ -1021,15 +1082,21 @@ function enterApp(){
 }
 
 function openSettings(){
-  const known = DATA.kanji.filter(k => state(k.c) === "known").length;
-  const learn = DATA.kanji.filter(k => state(k.c) === "learning").length;
   $("#sKanji").textContent = DATA.kanji.length;
-  $("#sKnown").textContent = known;
-  $("#sLearn").textContent = learn;
+  $("#sKnown").textContent = DATA.kanji.filter(k => state(k.c, "read")  === "known").length;
+  $("#sLearn").textContent = DATA.kanji.filter(k => state(k.c, "write") === "known").length;
   const d = DATA.syncedAt ? new Date(DATA.syncedAt) : null;
   $("#syncedAt").textContent = d
     ? `Loaded ${d.toLocaleDateString()} from ${DATA.source}.`
     : "";
+  const twins = DATA.kanji.filter(k => k.rad && k.rad.mm).length;
+  const strokes = DATA.kanji.filter(k => STROKES[k.c]).length;
+  $("#diag").innerHTML =
+    `Build ${BUILD} &middot; ${twins} kanji with a radical mnemonic &middot; ` +
+    `${strokes} with stroke order.` +
+    (twins === 0
+      ? ` <b>None found — your saved copy predates this feature. Re-download to add them.</b>`
+      : "");
   $("#storeNote").textContent = Store.persistent
     ? "Saved on this device. Nothing is uploaded anywhere."
     : "This browser is blocking local storage, so progress will vanish when you close the tab. Save a backup file to keep it.";
@@ -1090,6 +1157,11 @@ function wire(){
     t = setTimeout(() => { curQuery = e.target.value; renderGrid(); }, 140);
   };
   $("#filter").onchange = e => { curFilter = e.target.value; renderGrid(); };
+  $$("#skillSeg button").forEach(b => b.onclick = () => {
+    $$("#skillSeg button").forEach(x => x.setAttribute("aria-selected", x === b));
+    skill = b.dataset.skill;
+    renderGrid();
+  });
   $("#studyBtn").onclick = startStudy;
   $("#gearBtn").onclick = openSettings;
 
@@ -1118,14 +1190,17 @@ function wire(){
   };
   $("#resetProg").onclick = async () => {
     if (!confirm("Reset progress for all 440 kanji? Your downloaded mnemonics stay.")) return;
-    PROG = {}; await Store.set("prog", PROG);
+    PROGS = { read: {}, write: {} };
+    await Store.set("prog", PROGS.read);
+    await Store.set("progw", PROGS.write);
     say("#setMsg", "ok", "Progress reset.");
     openSettings();
   };
   $("#forgetTok").onclick = async () => {
     if (!confirm("Delete the token, the downloaded kanji and your progress from this device?")) return;
-    await Store.del("token"); await Store.del("data"); await Store.del("prog");
-    DATA = null; PROG = {};
+    await Store.del("token"); await Store.del("data");
+    await Store.del("prog"); await Store.del("progw");
+    DATA = null; PROGS = { read: {}, write: {} };
     $("#settings").classList.add("hidden");
     $("#setup").classList.remove("hidden");
     $("#tok").value = "";
@@ -1139,10 +1214,11 @@ function wire(){
 (async function boot(){
   await Store.init();
   wire();
-  const [d, p, tok] = await Promise.all([
-    Store.get("data"), Store.get("prog"), Store.get("token")
+  const [d, p, pw, tok] = await Promise.all([
+    Store.get("data"), Store.get("prog"), Store.get("progw"), Store.get("token")
   ]);
-  PROG = p || {};
+  PROGS.read  = p  || {};
+  PROGS.write = pw || {};
   if (tok) $("#tok").value = tok;
   if (d && d.kanji && d.kanji.length){ DATA = d; enterApp(); return; }
   if (fileOrigin()){
