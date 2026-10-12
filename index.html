@@ -324,6 +324,73 @@ section.mn .hint{
 .stat b{display:block; font-family:var(--serif); font-size:25px; font-weight:400}
 .stat span{font-size:10.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--sage)}
 
+/* ---------- course switch & level stepper ---------- */
+.bar-top{align-items:center}
+.course{display:flex; border:1px solid var(--rule); flex:0 0 auto}
+.course button{
+  font-size:12px; padding:4px 9px; color:var(--mist); background:#fff;
+  letter-spacing:.02em; line-height:1.4;
+}
+.course button[data-c="grade"]{font-family:var(--serif); font-size:14px; padding:3px 9px}
+.course button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
+nav#grades.levels{align-items:stretch}
+.lv-step{
+  flex:0 0 56px; font-family:var(--serif); font-size:28px; line-height:1;
+  color:var(--mist); padding:0 0 4px;
+}
+.lv-step[disabled]{opacity:.22; cursor:default}
+.lv-pick{
+  flex:1; position:relative; text-align:center; padding:5px 0 7px;
+  border-bottom:2px solid var(--shu); cursor:pointer;
+}
+.lv-pick b{display:block; font-family:var(--serif); font-weight:400; font-size:25px; line-height:1.1}
+.lv-pick small{display:block; font-size:9.5px; letter-spacing:.1em; color:var(--sage); margin-top:2px}
+/* The native picker sits invisibly over the number: tap it to jump levels. */
+.lv-pick select{position:absolute; inset:0; width:100%; opacity:0; font-size:16px; cursor:pointer}
+#notice{
+  margin:10px 0; padding:11px 12px; border-left:2px solid var(--shu);
+  background:rgba(196,51,29,.05); font-size:13.5px; color:var(--mist); line-height:1.55;
+}
+#notice button{
+  display:block; margin-top:8px; padding:8px 12px; background:var(--sumi);
+  color:var(--paper); font-size:13px; font-weight:600;
+}
+
+/* ---------- writing pad ---------- */
+.square.sq-pad{width:min(84vw, 46vh, 330px); touch-action:none; cursor:crosshair}
+.st-body.front .square.sq-pad{width:min(80vw, 44vh, 330px)}
+.pad{touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none}
+.pad .ink{
+  fill:none; stroke:var(--sumi); stroke-width:4.5;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+/* A wrong stroke is marked in the teacher's red, then lifted off the page. */
+.pad .ink.wrong{stroke:var(--shu)}
+.pad .ink.fade{opacity:0; transition:opacity .5s ease .3s}
+.pad path.done{animation:settle .22s ease both}
+.pad path.hint{stroke:var(--shu); opacity:.5}
+.pad .startdot{fill:var(--shu)}
+@keyframes settle{from{opacity:.35}to{opacity:1}}
+.padmsg{
+  text-align:center; font-size:13.5px; color:var(--mist);
+  min-height:1.65em; margin:10px 0 2px; padding:0 6px;
+}
+.padmsg.warn{color:var(--shu)}
+.padbar{display:flex; justify-content:center; gap:26px; margin-top:4px}
+.linkbtn{
+  font-size:13px; color:var(--mist); padding:8px 2px;
+  text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--rule);
+}
+.strokehead .replay[aria-pressed="true"]{background:var(--sumi); color:var(--paper); border-color:var(--sumi)}
+.verdict{
+  margin:16px 0 0; padding:10px 12px; font-size:14px; line-height:1.55;
+  border-left:2px solid var(--sage); background:rgba(138,154,130,.08);
+}
+.verdict.again{border-color:var(--shu); background:rgba(196,51,29,.05)}
+/* The suggested grade gets the solid button. */
+#stActions.flip .again{background:var(--sumi); color:var(--paper); border-color:var(--sumi)}
+#stActions.flip .got{background:#fff; color:var(--mist); border-color:var(--rule)}
+
 @media (prefers-reduced-motion:reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
 }
@@ -336,7 +403,9 @@ section.mn .hint{
   #search,#filter,.pane input,.markbtn,.again,.pane .ghost{background:#1D1C14}
   .square{background:#1B1A13}
   .step{background:#1B1A13} .replay{background:#1D1C14}
-  .seg button{background:#1D1C14}
+  .seg button,.course button{background:#1D1C14}
+  .course button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
+  #stActions.flip .got{background:#1D1C14}
   .seg button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
   #launch button,.got{background:var(--sumi); color:var(--paper)}
   .wk-reading{background:var(--sumi); color:var(--paper)}
@@ -350,7 +419,7 @@ section.mn .hint{
 <div id="setup" class="pane">
   <div class="eyebrow">教育漢字 · Kyōiku Kanji</div>
   <h1>Grade&nbsp;1–3 kanji,<br>with your WaniKani mnemonics.</h1>
-  <p>440 characters from the Japanese school curriculum. Paste a WaniKani API token and this page pulls your meanings, readings and mnemonics once, then works offline.</p>
+  <p>The 440 characters of the Japanese school curriculum, plus every WaniKani level your account can reach. Paste a WaniKani API token and this page pulls your meanings, readings and mnemonics once, then works offline.</p>
 
   <label for="tok">WaniKani API token</label>
   <input id="tok" type="password" inputmode="text" autocomplete="off"
@@ -373,7 +442,10 @@ section.mn .hint{
 <div id="app" class="hidden">
   <header id="bar">
     <div class="bar-top">
-      <span class="wordmark">教育漢字</span>
+      <div class="course" id="courseSeg" role="tablist" aria-label="Course">
+        <button role="tab" data-c="grade" aria-selected="true">学年</button>
+        <button role="tab" data-c="wk" aria-selected="false">WaniKani</button>
+      </div>
       <span class="eyebrow" id="tally"></span>
       <button id="gearBtn" aria-label="Settings">⚙</button>
     </div>
@@ -397,7 +469,7 @@ section.mn .hint{
       </select>
     </div>
   </header>
-  <main><div id="grid"></div></main>
+  <main><div id="notice" class="hidden"></div><div id="grid"></div></main>
   <div id="launch">
     <button id="studyBtn">Study this grade</button>
   </div>
@@ -429,6 +501,7 @@ section.mn .hint{
   <p id="diag" class="note"></p>
   <button class="ghost" id="resyncBtn">Re-download from WaniKani</button>
   <button class="ghost" id="orderBtn"></button>
+  <button class="ghost" id="strokeAllBtn">Save stroke order for every level</button>
   <button class="ghost" id="exportBtn">Save a backup file</button>
   <button class="ghost" id="importBtn2">Load a backup file</button>
   <button class="ghost danger" id="resetProg">Reset my progress</button>
@@ -462,7 +535,7 @@ const GRADES = {
 const GRADE_OF = {};
 for (const g of [1,2,3]) for (const ch of GRADES[g]) GRADE_OF[ch] = +g;
 
-const BUILD = "2026-08-23a";
+const BUILD = "2026-10-12a";
 const WK_API = "https://api.wanikani.com/v2";
 const WK_REV = "20170710";
 
@@ -524,12 +597,28 @@ const Store = (() => {
    ===================================================================== */
 let DATA = null;                 // {kanji:[...], syncedAt, source}
 let PROGS = { read: {}, write: {} };   // per skill: char -> {box, due, seen}
-let skill = "read";
-let order = "easy";              // "easy" = simplest first, or "random"                    // "read" = kanji->meaning, "write" = meaning->kanji
+let skill = "read";              // "read" = kanji -> meaning, "write" = meaning -> kanji
+let order = "easy";              // "easy" = simplest first, or "random"
 const P = () => PROGS[skill];
 const STORE_KEY = { read: "prog", write: "progw" };
 let BY_CHAR = new Map();
-let curGrade = 1, curFilter = "all", curQuery = "";
+let curFilter = "all", curQuery = "";
+
+/* Two ways to slice the same kanji: school grade, or WaniKani level.
+   Progress belongs to the character, so it carries across both. */
+let course = "grade";                    // "grade" | "wk"
+let curGroup = { grade: 1, wk: 1 };
+const cur = () => curGroup[course];
+const groupOf  = k => course === "grade" ? k.g : k.lv;
+function maxLevel(){
+  const cap = DATA && DATA.user && DATA.user.max;
+  const top = DATA ? DATA.kanji.reduce((m, k) => Math.max(m, k.lv || 0), 0) : 1;
+  return Math.max(1, cap ? Math.min(cap, top || cap) : top);
+}
+const inCourse = k => course === "grade"
+  ? (k.g >= 1 && k.g <= 3)
+  : (k.lv >= 1 && k.lv <= maxLevel());
+const inGroup  = k => inCourse(k) && groupOf(k) === cur();
 
 const fileOrigin = () => location.protocol === "file:";
 const $  = s => document.querySelector(s);
@@ -592,11 +681,18 @@ async function fetchAll(type, token, onPage){
 }
 
 async function sync(token){
-  const need = new Set(Object.keys(GRADE_OF));
+  setProgress(4, "Checking your account…");
+  const me = (await wkGet(`${WK_API}/user`, token)).data || {};
+  const user = {
+    level: me.level || 1,
+    // Free accounts reach level 3; respect whatever the subscription grants.
+    max: (me.subscription && me.subscription.max_level_granted) || 3,
+    name: me.username || ""
+  };
 
-  setProgress(8, "Contacting WaniKani…");
+  setProgress(8, "Reading kanji…");
   const rawKanji = await fetchAll("kanji", token,
-    (p, n) => setProgress(8 + p * 22, `Reading kanji… ${n} so far`));
+    (p, n) => setProgress(8 + p * 15, `Reading kanji… ${n} so far`));
 
   setProgress(58, "Reading radicals…");
   const rawRads = await fetchAll("radical", token,
@@ -615,13 +711,13 @@ async function sync(token){
       radByChar.set(d.characters, { n: name, mm: d.meaning_mnemonic || "" });
   }
 
-  setProgress(86, "Matching the grade lists…");
+  setProgress(86, "Matching grades and levels…");
   const pick = v => (v || []).filter(x => x.accepted_answer !== false)
                              .sort((a,b) => (b.primary?1:0) - (a.primary?1:0));
   const kanji = [], taken = new Set();
   for (const s of rawKanji){
     const d = s.data, ch = d.characters;
-    if (!ch || !need.has(ch)) continue;
+    if (!ch || !d.level || d.level > user.max) continue;
     // WaniKani retires subjects and replaces them; a retired twin must not
     // win, and BY_CHAR keeps the last write, so drop both cases here.
     if (d.hidden_at || taken.has(ch)) continue;
@@ -630,8 +726,9 @@ async function sync(token){
     const kanjiMeanings = pick(d.meanings).map(x => x.meaning);
     kanji.push({
       c: ch,
-      g: GRADE_OF[ch],
+      g: GRADE_OF[ch] || 0,
       lv: d.level || 0,
+      lp: d.lesson_position ?? null,
       m: pick(d.meanings).map(x => x.meaning),
       on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
       kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
@@ -647,7 +744,9 @@ async function sync(token){
   if (!kanji.length) throw new Error("EMPTY");
 
   setProgress(96, "Saving to this device…");
-  DATA = { kanji, syncedAt: new Date().toISOString(), source: "WaniKani API" };
+  DATA = { kanji, user, full: true, syncedAt: new Date().toISOString(), source: "WaniKani API" };
+  curGroup.wk = Math.min(user.level, user.max);
+  await Store.set("groups", curGroup);
   await Store.set("data", DATA);
   await Store.set("token", token);
   setProgress(100, `Saved ${kanji.length} kanji.`);
@@ -708,7 +807,8 @@ function toggleKnown(ch){
 function visible(){
   const q = curQuery.trim().toLowerCase();
   return DATA.kanji.filter(k => {
-    if (k.g !== curGrade && !q) return false;
+    if (!inCourse(k)) return false;
+    if (groupOf(k) !== cur() && !q) return false;
     if (q){
       const hay = k.c + " " + k.m.join(" ").toLowerCase() + " " +
                   k.on.join(" ") + " " + k.kun.join(" ");
@@ -719,12 +819,51 @@ function visible(){
   });
 }
 
+function renderNav(){
+  $$("#courseSeg button").forEach(b => b.setAttribute("aria-selected", b.dataset.c === course));
+  const nav = $("#grades");
+  if (course === "grade"){
+    nav.className = "";
+    nav.innerHTML = [1,2,3].map(g =>
+      `<button role="tab" data-g="${g}" aria-selected="${g === cur()}">${"一二三"[g-1]}年<small>Grade ${g}</small></button>`
+    ).join("");
+  } else {
+    const max = maxLevel(), lv = cur(), you = DATA.user && DATA.user.level;
+    const opts = Array.from({ length: max }, (_, i) => i + 1).map(n =>
+      `<option value="${n}"${n === lv ? " selected" : ""}>Level ${n}${n === you ? " (yours)" : ""}</option>`
+    ).join("");
+    nav.className = "levels";
+    nav.innerHTML = `
+      <button class="lv-step" data-d="-1" aria-label="Previous level"${lv <= 1 ? " disabled" : ""}>‹</button>
+      <label class="lv-pick"><b>${lv}</b>
+        <small>${lv === you ? "Your current level" : "WaniKani level"}</small>
+        <select aria-label="Jump to level">${opts}</select></label>
+      <button class="lv-step" data-d="1" aria-label="Next level"${lv >= max ? " disabled" : ""}>›</button>`;
+  }
+  const notice = $("#notice");
+  if (course === "wk" && !DATA.full){
+    notice.classList.remove("hidden");
+    notice.innerHTML = `Only your grade 1–3 kanji are on this device. Download again to add every WaniKani level.
+      <button data-resync>Download all levels</button>`;
+  } else notice.classList.add("hidden");
+}
+
+function setGroup(n){
+  curGroup[course] = n;
+  Store.set("groups", curGroup);
+  window.scrollTo(0, 0);
+  renderNav(); renderGrid();
+  if (course === "wk") prefetchStrokes(DATA.kanji.filter(inGroup).map(k => k.c));
+}
+
 function renderGrid(){
   const list = visible(), grid = $("#grid");
   if (!list.length){
     grid.style.border = "none";
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1">
-      <b>Nothing here</b>${curQuery ? "Try a different search." : "Change the filter to see more kanji."}</div>`;
+      <b>Nothing here</b>${curQuery ? "Try a different search."
+        : course === "wk" && !DATA.full ? "This level hasn’t been downloaded yet."
+        : "Change the filter to see more kanji."}</div>`;
   } else {
     grid.style.border = "";
     grid.innerHTML = list.map((k, i) => {
@@ -732,10 +871,10 @@ function renderGrid(){
       return `<button class="cell st-${st}"
         style="animation-delay:${Math.min(i,40)*8}ms" data-c="${esc(k.c)}"
         aria-label="${esc(k.c)} — ${esc(k.m[0]||"")}">
-        <span>${esc(k.c)}</span><i class="lvl">${k.lv || ""}</i></button>`;
+        <span>${esc(k.c)}</span><i class="lvl">${course === "grade" ? (k.lv || "") : ""}</i></button>`;
     }).join("");
   }
-  const inGrade = DATA.kanji.filter(k => k.g === curGrade);
+  const inGrade = DATA.kanji.filter(inGroup);
   const known = inGrade.filter(k => state(k.c) === "known").length;
   $("#tally").textContent =
     `${known} / ${inGrade.length} ${skill === "write" ? "writable" : "readable"}`;
@@ -759,24 +898,28 @@ function openSheet(ch){
   sheet.className = "sheet";
   sheet.setAttribute("role","dialog");
   sheet.setAttribute("aria-label", k.m[0] || ch);
-  sheet.innerHTML = detailHTML(k, true);
   document.body.append(scrim, sheet);
-  initStrokes(sheet);
   document.body.style.overflow = "hidden";
-
   const close = () => {
     scrim.remove(); sheet.remove();
     document.body.style.overflow = "";
     renderGrid();
   };
   scrim.onclick = close;
-  sheet.querySelector("[data-close]").onclick = close;
-  const mk = sheet.querySelector(".markbtn");
-  mk.onclick = () => {
-    const isKnown = toggleKnown(ch);
-    mk.classList.toggle("on", isKnown);
-    mk.textContent = isKnown ? "Known ✓" : "Mark as known";
+  const fill = () => {
+    sheet.innerHTML = detailHTML(k, true);
+    initStrokes(sheet);
+    sheet.querySelector("[data-close]").onclick = close;
+    const mk = sheet.querySelector(".markbtn");
+    mk.onclick = () => {
+      const isKnown = toggleKnown(ch);
+      mk.classList.toggle("on", isKnown);
+      mk.textContent = isKnown ? "Known ✓" : "Mark as known";
+    };
   };
+  fill();
+  if (!strokesOf(ch))
+    ensureStrokes(ch).then(ds => { if (ds && sheet.isConnected) fill(); });
 }
 
 function detailHTML(k, withHead){
@@ -787,23 +930,27 @@ function detailHTML(k, withHead){
     : "";
   return `
   ${withHead ? `<div class="sheet-head">
-      <span class="eyebrow">Grade ${k.g} · WaniKani level ${k.lv}</span>
+      <span class="eyebrow">${k.g ? `Grade ${k.g} · ` : ""}WaniKani level ${k.lv}</span>
       <button data-close aria-label="Close">✕</button></div>` : ""}
-  <div class="square${STROKES[k.c] ? " sq-anim" : ""}">${STROKES[k.c]
-      ? `<svg class="stroke-svg" viewBox="0 0 109 109" data-anim="${esc(k.c)}"
-             aria-label="Stroke order for ${esc(k.c)}"></svg>`
-      : `<b>${esc(k.c)}</b>`}</div>
+  ${strokesOf(k.c)
+      ? `<div class="square sq-anim" data-sq="${esc(k.c)}"></div>
+         <div class="padmsg hidden" data-padmsg aria-live="polite"></div>`
+      : `<div class="square"><b>${esc(k.c)}</b></div>`}
   <div class="glosses">${esc(k.m.join(", "))}</div>
   <div class="readings">
     ${k.on.length  ? `<i><span class="eyebrow">On</span>${esc(k.on.join("、"))}</i>` : ""}
     ${k.kun.length ? `<i><span class="eyebrow">Kun</span>${esc(k.kun.join("、"))}</i>` : ""}
   </div>
   ${parts ? `<div class="parts">${parts}</div>` : ""}
-  ${STROKES[k.c] ? `<section class="mn">
+  ${strokesOf(k.c) ? `<section class="mn">
       <div class="strokehead">
         <span class="eyebrow">Stroke order</span>
-        <button class="replay" data-replay>Animate</button>
-        <span class="cnt">${STROKES[k.c].length} stroke${STROKES[k.c].length===1?"":"s"}</span>
+        <span class="cnt">${strokesOf(k.c).length} stroke${strokesOf(k.c).length===1?"":"s"}</span>
+      </div>
+      <div class="strokehead">
+        <button class="replay" data-replay aria-pressed="true">Watch</button>
+        <button class="replay" data-trace aria-pressed="false">Trace</button>
+        <button class="replay" data-write aria-pressed="false">Write</button>
       </div>
       <div class="steps" data-steps="${esc(k.c)}"></div>
     </section>` : ""}
@@ -840,7 +987,7 @@ function mkPath(d, cls){
 /* The classic dictionary diagram: each square adds one stroke,
    the newest drawn in the teacher's vermilion. */
 function buildSteps(box, ch){
-  const ds = STROKES[ch];
+  const ds = strokesOf(ch);
   if (!ds) return;
   box.innerHTML = "";
   ds.forEach((_, i) => {
@@ -857,13 +1004,13 @@ function buildSteps(box, ch){
 }
 
 function drawAll(svg, ch){
-  const ds = STROKES[ch];
+  const ds = strokesOf(ch);
   svg.innerHTML = "";
   ds.forEach(d => svg.appendChild(mkPath(d)));
 }
 
 function animateStrokes(svg, ch){
-  const ds = STROKES[ch];
+  const ds = strokesOf(ch);
   if (!ds) return;
   if (reduceMotion()){ drawAll(svg, ch); return; }
   svg.innerHTML = "";
@@ -891,35 +1038,355 @@ function animateStrokes(svg, ch){
 
 /* Wire up any stroke widgets inside a freshly inserted chunk of DOM. */
 function initStrokes(root){
-  const svg = root.querySelector("[data-anim]");
-  if (svg){
-    const ch = svg.dataset.anim;
-    animateStrokes(svg, ch);
-    svg.parentElement.onclick = () => animateStrokes(svg, ch);
-    const btn = root.querySelector("[data-replay]");
-    if (btn) btn.onclick = e => { e.stopPropagation(); animateStrokes(svg, ch); };
+  const sq = root.querySelector("[data-sq]");
+  if (sq){
+    const ch = sq.dataset.sq, msg = root.querySelector("[data-padmsg]");
+    const btns = { watch: root.querySelector("[data-replay]"),
+                   trace: root.querySelector("[data-trace]"),
+                   write: root.querySelector("[data-write]") };
+    const press = which => Object.entries(btns).forEach(([k, b]) =>
+      b && b.setAttribute("aria-pressed", k === which));
+    const watch = () => {
+      press("watch");
+      sq.classList.remove("sq-pad"); sq.classList.add("sq-anim");
+      sq.innerHTML = `<svg class="stroke-svg" viewBox="0 0 109 109"
+        aria-label="Stroke order for ${esc(ch)}"></svg>`;
+      animateStrokes(sq.firstChild, ch);
+      sq.onclick = watch;
+      msg.classList.add("hidden");
+    };
+    // Trace over a faint outline with the next stroke's start marked,
+    // then write with nothing to copy. Practice only; nothing is graded.
+    const practise = ghost => {
+      press(ghost ? "trace" : "write");
+      sq.onclick = null;
+      sq.classList.remove("sq-anim"); sq.classList.add("sq-pad");
+      msg.classList.remove("hidden", "warn");
+      msg.textContent = ghost ? "Trace each stroke, starting from the red dot."
+                              : "Write it from memory, stroke by stroke.";
+      makePad(sq, ch, {
+        ghost, guide: ghost, tol: ghost ? 1 : 1.25,
+        onStroke: info => { msg.textContent = padMsg(info);
+                            msg.classList.toggle("warn", info.kind !== "ok"); },
+        onDone: r => { msg.classList.remove("warn");
+                       msg.textContent = verdictText(r) + " Tap Trace or Write to go again."; }
+      });
+      const scroller = sq.closest(".sheet, .st-body");
+      if (scroller) scroller.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" });
+    };
+    watch();
+    if (btns.watch) btns.watch.onclick = e => { e.stopPropagation(); watch(); };
+    if (btns.trace) btns.trace.onclick = e => { e.stopPropagation(); practise(true); };
+    if (btns.write) btns.write.onclick = e => { e.stopPropagation(); practise(false); };
   }
   const steps = root.querySelector("[data-steps]");
   if (steps) buildSteps(steps, steps.dataset.steps);
 }
 
 /* =====================================================================
+   Stroke data beyond the embedded set — fetched from KanjiVG on demand
+   and kept on this device
+   ===================================================================== */
+const KVG_TAG = "r20260714";
+function kvgUrls(ch){
+  const f = ch.codePointAt(0).toString(16).padStart(5, "0") + ".svg";
+  return [`https://raw.githubusercontent.com/KanjiVG/kanjivg/${KVG_TAG}/kanji/${f}`,
+          `https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@${KVG_TAG}/kanji/${f}`];
+}
+let EXT = {};                    // char -> [path d, …], persisted as "strokes"
+const ABSENT = new Set();        // KanjiVG has no file for these
+const inflight = new Map();
+function strokesOf(ch){ return STROKES[ch] || EXT[ch] || null; }
+
+/* Stroke paths are the <path> elements, in document order; the stroke
+   numbers are <text>, so they never match. */
+function parseKvg(text){
+  const out = [], re = /<path\b[^>]*?\sd="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(text))) out.push(m[1].replace(/\s+/g, " ").trim());
+  return out;
+}
+
+let saveTimer = null;
+function saveExtSoon(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => Store.set("strokes", EXT), 700);
+}
+
+async function fetchStrokes(ch){
+  let notFound = 0;
+  for (const url of kvgUrls(ch)){
+    try {
+      const r = await fetch(url);
+      if (r.status === 404){ notFound++; continue; }
+      if (!r.ok) continue;
+      const ds = parseKvg(await r.text());
+      if (ds.length){ EXT[ch] = ds; saveExtSoon(); return ds; }
+    } catch(e){ /* offline or blocked — try the next mirror */ }
+  }
+  if (notFound === kvgUrls(ch).length) ABSENT.add(ch);
+  return null;
+}
+function ensureStrokes(ch){
+  if (strokesOf(ch)) return Promise.resolve(strokesOf(ch));
+  if (ABSENT.has(ch)) return Promise.resolve(null);
+  if (!inflight.has(ch))
+    inflight.set(ch, fetchStrokes(ch).finally(() => inflight.delete(ch)));
+  return inflight.get(ch);
+}
+async function prefetchStrokes(chars, onProgress){
+  const todo = [...new Set(chars)].filter(c => !strokesOf(c) && !ABSENT.has(c));
+  let i = 0, done = 0;
+  const worker = async () => {
+    while (i < todo.length){
+      await ensureStrokes(todo[i++]);
+      onProgress && onProgress(++done, todo.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, todo.length) }, worker));
+  return todo.length;
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
+
+/* =====================================================================
+   Writing pad
+   Each stroke is compared with the next KanjiVG stroke: where it sits,
+   what shape it makes, and which way it was drawn.
+   ===================================================================== */
+const NS = 24;                       // samples per stroke
+const BASE_TOL = 13;                 // mean distance allowed, in 109-unit space
+let measurer = null;
+function refPoints(d){
+  if (!measurer){
+    measurer = document.createElementNS(SVGNS, "svg");
+    measurer.setAttribute("viewBox", "0 0 109 109");
+    measurer.style.cssText = "position:absolute;width:0;height:0;visibility:hidden";
+    document.body.appendChild(measurer);
+  }
+  const p = mkPath(d); measurer.appendChild(p);
+  const L = p.getTotalLength(), pts = [];
+  for (let i = 0; i < NS; i++){ const q = p.getPointAtLength(L * i / (NS - 1)); pts.push([q.x, q.y]); }
+  p.remove();
+  return { pts, len: L };
+}
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+function polyLen(pts){ let L = 0; for (let i = 1; i < pts.length; i++) L += dist(pts[i-1], pts[i]); return L; }
+function resample(pts, n){
+  const total = polyLen(pts);
+  if (pts.length < 2 || total === 0) return Array.from({ length: n }, () => pts[0].slice());
+  const out = [pts[0].slice()], step = total / (n - 1);
+  let acc = 0, prev = pts[0];
+  for (let i = 1; i < pts.length && out.length < n; i++){
+    let cur = pts[i], d = dist(prev, cur);
+    while (acc + d >= step && out.length < n){
+      const t = (step - acc) / d;
+      const q = [prev[0] + t * (cur[0] - prev[0]), prev[1] + t * (cur[1] - prev[1])];
+      out.push(q); prev = q; d = dist(prev, cur); acc = 0;
+    }
+    acc += d; prev = cur;
+  }
+  while (out.length < n) out.push(pts[pts.length - 1].slice());
+  return out;
+}
+/* Mean cosine between matching segments: +1 same way, -1 reversed. */
+function heading(u, r){
+  let s = 0, n = 0;
+  for (let i = 1; i < NS; i++){
+    const ax = u[i][0]-u[i-1][0], ay = u[i][1]-u[i-1][1];
+    const bx = r[i][0]-r[i-1][0], by = r[i][1]-r[i-1][1];
+    const m = Math.hypot(ax, ay) * Math.hypot(bx, by);
+    if (m > 1e-6){ s += (ax*bx + ay*by) / m; n++; }
+  }
+  return n ? s / n : 0;
+}
+/* {v: "ok" | "dir" (right place, drawn backwards) | "miss", fwd} */
+function compareStroke(user, ref, tol){
+  const u = resample(user, NS), r = ref.pts, T = BASE_TOL * tol;
+  let fwd = 0, rev = 0;
+  for (let i = 0; i < NS; i++){ fwd += dist(u[i], r[i]); rev += dist(u[NS-1-i], r[i]); }
+  fwd /= NS; rev /= NS;
+  const dot = ref.len < 16;
+  // Length of the resampled path, so a wobbly finger isn't read as a long stroke.
+  const uLen = polyLen(u);
+  const lenOk = dot || (uLen > ref.len * 0.4 && uLen < ref.len * 2.2 + 10);
+  const ends  = dot || (dist(u[0], r[0]) <= 1.6 * T && dist(u[NS-1], r[NS-1]) <= 1.6 * T);
+  const hd = dot ? 1 : heading(u, r);
+  if (fwd <= T && lenOk && ends && hd > 0.25) return { v: "ok", fwd };
+  if (!dot && rev <= T && lenOk && heading(u.slice().reverse(), r) > 0.25) return { v: "dir", fwd };
+  return { v: "miss", fwd };
+}
+/* Judge a stroke against the one expected next. A stroke that fits a later
+   stroke clearly better is a stroke-order error, even if it is close to the
+   expected one (parallel lines sit near each other). */
+function classify(user, refs, idx, tol){
+  const here = compareStroke(user, refs[idx], tol);
+  let later = -1, best = Infinity;
+  for (let j = idx + 1; j < refs.length; j++){
+    const c = compareStroke(user, refs[j], tol);
+    if (c.v === "ok" && c.fwd < best){ best = c.fwd; later = j; }
+  }
+  if (here.v === "ok" && !(later >= 0 && best < here.fwd * 0.55)) return { kind: "ok" };
+  if (later >= 0) return { kind: "order", later };
+  return { kind: here.v === "dir" ? "dir" : "miss" };
+}
+
+function makePad(square, ch, opts){
+  const ds = strokesOf(ch);
+  if (!ds) return null;
+  const tol = opts.tol || 1, refs = ds.map(refPoints);
+  square.innerHTML = "";
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("viewBox", "0 0 109 109");
+  svg.setAttribute("class", "stroke-svg pad");
+  svg.setAttribute("aria-label", "Writing pad");
+  const layer = () => { const g = document.createElementNS(SVGNS, "g"); svg.appendChild(g); return g; };
+  const gGhost = layer(), gHint = layer(), gDone = layer(), gInk = layer();
+  if (opts.ghost) ds.forEach(d => gGhost.appendChild(mkPath(d, "ghost")));
+  square.appendChild(svg);
+
+  let idx = 0, misses = 0, hints = 0, missHere = 0, finished = false;
+  let pts = null, live = null, pid = null;
+  // People write consistently off-centre; learn that drift from accepted
+  // strokes so a whole character drawn a little low still reads correctly.
+  let shift = [0, 0], nShift = 0;
+  const result = extra => ({ total: ds.length, done: idx, misses, hints,
+                             clean: misses === 0 && hints === 0, ...extra });
+
+  function guide(){
+    gHint.innerHTML = "";
+    if (finished) return;
+    const shown = missHere >= 3;
+    if (shown){
+      const p = mkPath(ds[idx], "hint");
+      gHint.appendChild(p);
+      if (!reduceMotion()){
+        const L = p.getTotalLength();
+        p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+        requestAnimationFrame(() => {
+          p.style.transition = `stroke-dashoffset ${Math.max(250, Math.min(700, L * 8))}ms linear`;
+          p.style.strokeDashoffset = 0;
+        });
+      }
+    }
+    if (opts.guide || shown){
+      const [x, y] = refs[idx].pts[0];
+      const c = document.createElementNS(SVGNS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", 3.4);
+      c.setAttribute("class", "startdot");
+      gHint.appendChild(c);
+    }
+  }
+  const local = e => {
+    const b = svg.getBoundingClientRect();
+    return [(e.clientX - b.left) / b.width * 109, (e.clientY - b.top) / b.height * 109];
+  };
+  const draw = () => live.setAttribute("points", pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" "));
+
+  svg.addEventListener("pointerdown", e => {
+    if (finished || pid !== null) return;
+    e.preventDefault();
+    pid = e.pointerId;
+    try { svg.setPointerCapture(pid); } catch(_){}
+    pts = [local(e)];
+    live = document.createElementNS(SVGNS, "polyline");
+    live.setAttribute("class", "ink");
+    gInk.appendChild(live); draw();
+  });
+  svg.addEventListener("pointermove", e => {
+    if (e.pointerId !== pid) return;
+    e.preventDefault();
+    const q = local(e);
+    if (dist(q, pts[pts.length - 1]) < 0.7) return;
+    pts.push(q); draw();
+  });
+  const lift = e => {
+    if (e.pointerId !== pid) return;
+    pid = null;
+    try { svg.releasePointerCapture(e.pointerId); } catch(_){}
+    if (e.type === "pointercancel"){ live.remove(); return; }
+    judge(pts, live);
+  };
+  svg.addEventListener("pointerup", lift);
+  svg.addEventListener("pointercancel", lift);
+
+  function judge(raw, ink){
+    const user = raw.map(p => [p[0] - shift[0], p[1] - shift[1]]);
+    const c = classify(user, refs, idx, tol);
+    if (c.kind === "ok"){
+      const u = resample(raw, NS), r = refs[idx].pts;
+      const dx = u.reduce((a, p, i) => a + p[0] - r[i][0], 0) / NS;
+      const dy = u.reduce((a, p, i) => a + p[1] - r[i][1], 0) / NS;
+      nShift++;
+      shift = [Math.max(-14, Math.min(14, shift[0] + (dx - shift[0]) / nShift)),
+               Math.max(-14, Math.min(14, shift[1] + (dy - shift[1]) / nShift))];
+      ink.remove();
+      gDone.appendChild(mkPath(ds[idx], "done"));
+      idx++; missHere = 0;
+      if (idx >= ds.length){
+        finished = true; gHint.innerHTML = "";
+        opts.onDone && opts.onDone(result());
+        return;
+      }
+      guide();
+      opts.onStroke && opts.onStroke({ kind: "ok", idx, total: ds.length });
+      return;
+    }
+    misses++; missHere++;
+    if (missHere === 3) hints++;
+    ink.classList.add("wrong");
+    requestAnimationFrame(() => requestAnimationFrame(() => ink.classList.add("fade")));
+    setTimeout(() => ink.remove(), 900);
+    guide();
+    opts.onStroke && opts.onStroke({
+      kind: c.kind, idx, later: c.later, total: ds.length, shown: missHere >= 3 });
+  }
+  guide();
+  return {
+    result,
+    stop(){ finished = true; gHint.innerHTML = ""; },
+    get remaining(){ return ds.length - idx; }
+  };
+}
+
+function padMsg(i){
+  const n = i.idx + 1;
+  if (i.kind === "ok") return `Stroke ${n} of ${i.total}`;
+  if (i.shown) return `Here’s stroke ${n}. Trace it from the red dot.`;
+  if (i.kind === "order") return `That’s stroke ${i.later + 1}. Stroke ${n} comes first.`;
+  if (i.kind === "dir") return `Right place, wrong direction. Start stroke ${n} from the other end.`;
+  return `Not quite. Try stroke ${n} again.`;
+}
+function verdictText(r){
+  const s = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (r.gaveUp) return `Answer shown after ${r.done} of ${r.total} strokes.`;
+  if (r.clean)  return "Clean. Every stroke right first time.";
+  if (r.hints)  return `${s(r.hints, "stroke")} needed showing, ${s(r.misses, "correction")} in all.`;
+  return `${s(r.misses, "correction")}, nothing needed showing.`;
+}
+/* Got it, unless a stroke had to be demonstrated, the answer was shown
+   early, or there was more than one correction. */
+const passes = r => !r || (!r.gaveUp && r.hints === 0 && r.misses <= 1);
+
+/* =====================================================================
    Study session
    ===================================================================== */
-let session = [], sIdx = 0, revealed = false;
+let session = [], sIdx = 0, revealed = false, pad = null, suggest = true, cardSeq = 0;
 
 function queue(){
   const t = now();
   return DATA.kanji
-    .filter(k => k.g === curGrade)
+    .filter(inGroup)
     .filter(k => { const p = P()[k.c]; return !p || !p.seen || p.due <= t; });
 }
 
 /* Difficulty: WaniKani's own level is the best available ordering signal —
    it already blends frequency with complexity. Stroke count breaks ties, and
    matters most when you're writing rather than reading. */
-const strokeCount = k => (STROKES[k.c] || []).length;
-const difficulty  = k => (k.lv || 99) * 1000 + strokeCount(k);
+const strokeCount = k => (strokesOf(k.c) || []).length;
+/* Inside a WaniKani level, WaniKani's own lesson order is the ramp. */
+const difficulty  = k => course === "wk"
+  ? (k.lp ?? 999) * 100 + strokeCount(k)
+  : (k.lv || 99) * 1000 + strokeCount(k);
 
 const MAX_CARDS = 30;   // per session
 const MAX_NEW   = 10;   // unseen kanji per session, so reviews aren't drowned
@@ -928,7 +1395,7 @@ function buildSession(){
   const t = now(), bag = P();
   const due = [], fresh = [];
   for (const k of DATA.kanji){
-    if (k.g !== curGrade) continue;
+    if (!inGroup(k)) continue;
     const p = bag[k.c];
     if (!p || !p.seen) fresh.push(k);
     else if (p.due <= t) due.push(k);
@@ -952,7 +1419,7 @@ function buildSession(){
   }
   // Nothing scheduled: let the whole grade be revised rather than refusing.
   if (!picked.length){
-    const all = DATA.kanji.filter(k => k.g === curGrade);
+    const all = DATA.kanji.filter(inGroup);
     if (order !== "random") all.sort((a,b) => difficulty(a) - difficulty(b));
     return all.slice(0, MAX_CARDS);
   }
@@ -963,12 +1430,15 @@ function buildSession(){
 
 function startStudy(){
   session = buildSession(); sIdx = 0;
+  prefetchStrokes(session.map(k => k.c));
   $("#app").classList.add("hidden");
   $("#study").classList.remove("hidden");
   showCard();
 }
 
-function showCard(){
+async function showCard(){
+  const seq = ++cardSeq;
+  pad = null;
   if (sIdx >= session.length){
     $("#stActions").classList.add("hidden");
     $("#stBody").classList.remove("front");
@@ -984,34 +1454,66 @@ function showCard(){
   $("#stCount").textContent = `${sIdx + 1} / ${session.length}`;
   $("#stActions").classList.add("hidden");
   $("#stBody").classList.add("front");
-  $("#stBody").innerHTML = skill === "write"
-    ? `<div class="wprompt">${esc(k.m.join(", "))}</div>
+  if (skill !== "write"){
+    $("#stBody").innerHTML = `<div class="square"><b>${esc(k.c)}</b></div>
+       <div class="st-tap">Tap to reveal</div>`;
+    $("#stBody").onclick = () => reveal();
+    return;
+  }
+  const prompt = `<div class="wprompt">${esc(k.m.join(", "))}</div>
        <div class="readings">
          ${k.on.length  ? `<i><span class="eyebrow">On</span>${esc(k.on.join("\u3001"))}</i>` : ""}
          ${k.kun.length ? `<i><span class="eyebrow">Kun</span>${esc(k.kun.join("\u3001"))}</i>` : ""}
-       </div>
-       <div class="square blank"></div>
-       <div class="st-tap">Write it, then tap to check</div>`
-    : `<div class="square"><b>${esc(k.c)}</b></div>
-       <div class="st-tap">Tap to reveal</div>`;
-  $("#stBody").onclick = reveal;
+       </div>`;
+  $("#stBody").onclick = null;
+  if (!strokesOf(k.c)){
+    $("#stBody").innerHTML = prompt + `<div class="square blank"></div>
+       <div class="st-tap">Loading stroke order…</div>`;
+    await withTimeout(ensureStrokes(k.c), 5000);
+    if (seq !== cardSeq) return;
+  }
+  if (!strokesOf(k.c)){
+    // No stroke data reachable: fall back to paper and self-marking.
+    $("#stBody").innerHTML = prompt + `<div class="square blank"></div>
+       <div class="st-tap">Write it on paper, then tap to check</div>`;
+    $("#stBody").onclick = () => reveal();
+    return;
+  }
+  $("#stBody").innerHTML = prompt + `<div class="square sq-pad" id="padSq"></div>
+     <div class="padmsg" id="padMsg" aria-live="polite">Stroke 1 of ${strokesOf(k.c).length}</div>
+     <div class="padbar"><button class="linkbtn" id="padShow">Show answer</button></div>`;
+  pad = makePad($("#padSq"), k.c, {
+    tol: 1.25,
+    onStroke: info => { $("#padMsg").textContent = padMsg(info);
+                        $("#padMsg").classList.toggle("warn", info.kind !== "ok"); },
+    onDone: r => setTimeout(() => { if (seq === cardSeq) reveal(r); }, 450)
+  });
+  $("#padShow").onclick = () => reveal(pad.result({ gaveUp: pad.remaining > 0 }));
 }
 
-function reveal(){
+function reveal(result){
   if (revealed) return;
   revealed = true;
+  if (!result && pad) result = pad.result({ gaveUp: pad.remaining > 0 });
+  if (pad) pad.stop();
   const k = session[sIdx];
+  suggest = passes(result);
   $("#stBody").onclick = null;
   $("#stBody").classList.remove("front");
-  $("#stBody").innerHTML = detailHTML(k, false);
+  $("#stBody").innerHTML = (result
+      ? `<div class="verdict ${suggest ? "" : "again"}">${esc(verdictText(result))}</div>` : "")
+    + detailHTML(k, false);
   initStrokes($("#stBody"));
   $("#stBody").scrollTop = 0;
+  $("#stActions").classList.toggle("flip", !suggest);
   $("#stActions").classList.remove("hidden");
 }
 
 function answer(good){
   if (!revealed){ reveal(); return; }
   grade(session[sIdx].c, good);
+  $("#stActions").classList.remove("flip");
+  suggest = true;
   sIdx++;
   showCard();
 }
@@ -1055,12 +1557,12 @@ function subjectsToKanji(subs, radEntries){
   for (const s of subs){
     if (s.object && s.object !== "kanji") continue;
     const d = s.data, ch = d && d.characters;
-    if (!ch || !(ch in GRADE_OF) || seen.has(ch) || d.hidden_at) continue;
+    if (!ch || seen.has(ch) || d.hidden_at) continue;
     seen.add(ch);
     const iparts = (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean);
     const imeanings = pick(d.meanings).map(x => x.meaning);
     out.push({
-      c: ch, g: GRADE_OF[ch], lv: d.level || 0,
+      c: ch, g: GRADE_OF[ch] || 0, lv: d.level || 0, lp: d.lesson_position ?? null,
       m: pick(d.meanings).map(x => x.meaning),
       on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
       kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
@@ -1107,8 +1609,9 @@ async function importFiles(files, msgTarget){
     const kanji = subjectsToKanji(subs, radEntries);
     if (!kanji.length)
       return say(msgTarget, "err",
-        "Those files loaded, but held no grade 1–3 kanji. If you saved WaniKani pages, make sure you included the kanji pages, not only radicals.");
-    DATA = { kanji, syncedAt: new Date().toISOString(), source: "Imported file" };
+        "Those files loaded, but held no kanji. If you saved WaniKani pages, make sure you included the kanji pages, not only radicals.");
+    DATA = { kanji, full: kanji.some(k => !k.g),
+             syncedAt: new Date().toISOString(), source: "Imported file" };
   }
   await Store.set("data", DATA);
   enterApp();
@@ -1123,10 +1626,19 @@ function enterApp(){
   $("#settings").classList.add("hidden");
   $("#study").classList.add("hidden");
   $("#app").classList.remove("hidden");
+  curGroup.wk = Math.max(1, Math.min(curGroup.wk || 1, maxLevel()));
+  renderNav();
   renderGrid();
+  if (course === "wk") prefetchStrokes(DATA.kanji.filter(inGroup).map(k => k.c));
 }
 
 function openSettings(){
+  openSettingsStats();
+  $("#setMsg").innerHTML = "";
+  $("#app").classList.add("hidden");
+  $("#settings").classList.remove("hidden");
+}
+function openSettingsStats(){
   $("#sKanji").textContent = DATA.kanji.length;
   $("#sKnown").textContent = DATA.kanji.filter(k => state(k.c, "read")  === "known").length;
   $("#sLearn").textContent = DATA.kanji.filter(k => state(k.c, "write") === "known").length;
@@ -1135,7 +1647,8 @@ function openSettings(){
     ? `Loaded ${d.toLocaleDateString()} from ${DATA.source}.`
     : "";
   const twins = DATA.kanji.filter(k => k.rad && k.rad.mm).length;
-  const strokes = DATA.kanji.filter(k => STROKES[k.c]).length;
+  const strokes = DATA.kanji.filter(k => strokesOf(k.c)).length;
+  $("#strokeAllBtn").classList.toggle("hidden", !DATA.full);
   $("#diag").innerHTML =
     `Build ${BUILD} &middot; ${twins} kanji with a radical mnemonic &middot; ` +
     `${strokes} with stroke order.` +
@@ -1148,9 +1661,6 @@ function openSettings(){
   $("#orderBtn").textContent = order === "easy"
     ? "Lesson order: simplest first"
     : "Lesson order: random";
-  $("#setMsg").innerHTML = "";
-  $("#app").classList.add("hidden");
-  $("#settings").classList.remove("hidden");
 }
 
 function wire(){
@@ -1162,7 +1672,7 @@ function wire(){
     $("#setupMsg").innerHTML = "";
     try {
       const n = await sync(token);
-      say("#setupMsg", "ok", `Got ${n} kanji. Opening…`);
+      say("#setupMsg", "ok", `Got ${n} kanji across ${maxLevel()} level${maxLevel() === 1 ? "" : "s"}. Opening…`);
       setTimeout(enterApp, 500);
     } catch (err){
       $("#prog").classList.add("hidden");
@@ -1170,7 +1680,7 @@ function wire(){
       if (err.message === "AUTH"){
         say("#setupMsg", "err", "WaniKani rejected that token. Check for stray spaces, or make a new one in Settings → API Tokens.");
       } else if (err.message === "EMPTY"){
-        say("#setupMsg", "err", "Connected, but no grade 1–3 kanji came back. Is this token attached to a WaniKani account with subject access?");
+        say("#setupMsg", "err", "Connected, but no kanji came back. Is this token attached to a WaniKani account with subject access?");
       } else if (isNetworkFail(err)){
         say("#setupMsg", "err", fileOrigin()
           ? "Blocked by the browser, not by WaniKani. A page opened straight from storage isn’t allowed to contact wanikani.com. Put this file on a web address, or load a data file with the button above."
@@ -1189,12 +1699,21 @@ function wire(){
   };
 
   // --- browse
-  $$("#grades button").forEach(b => b.onclick = () => {
-    $$("#grades button").forEach(x => x.setAttribute("aria-selected", x === b));
-    curGrade = +b.dataset.g;
-    window.scrollTo(0, 0);
-    renderGrid();
+  $("#grades").onclick = e => {
+    const g = e.target.closest("[data-g]");
+    if (g) return setGroup(+g.dataset.g);
+    const st = e.target.closest("[data-d]");
+    if (st && !st.disabled) setGroup(Math.max(1, Math.min(maxLevel(), cur() + +st.dataset.d)));
+  };
+  $("#grades").onchange = e => { if (e.target.tagName === "SELECT") setGroup(+e.target.value); };
+  $$("#courseSeg button").forEach(b => b.onclick = () => {
+    if (course === b.dataset.c) return;
+    course = b.dataset.c;
+    Store.set("course", course);
+    curQuery = ""; $("#search").value = "";
+    setGroup(cur());
   });
+  $("#notice").onclick = e => { if (e.target.closest("[data-resync]")) $("#resyncBtn").click(); };
   $("#grid").onclick = e => {
     const c = e.target.closest(".cell");
     if (c) openSheet(c.dataset.c);
@@ -1219,7 +1738,7 @@ function wire(){
   $("#stAgain").onclick = () => answer(false);
   document.addEventListener("keydown", e => {
     if ($("#study").classList.contains("hidden")) return;
-    if (e.key === " " || e.key === "Enter"){ e.preventDefault(); revealed ? answer(true) : reveal(); }
+    if (e.key === " " || e.key === "Enter"){ e.preventDefault(); revealed ? answer(suggest) : reveal(); }
     if (e.key === "1") answer(false);
     if (e.key === "2") answer(true);
     if (e.key === "Escape") $("#stQuit").click();
@@ -1232,6 +1751,20 @@ function wire(){
     await Store.set("order", order);
     openSettings();
   };
+  $("#strokeAllBtn").onclick = async () => {
+    const btn = $("#strokeAllBtn");
+    btn.disabled = true;
+    const chars = DATA.kanji.filter(k => k.lv && k.lv <= maxLevel()).map(k => k.c);
+    const n = await prefetchStrokes(chars, (d, t) => { btn.textContent = `Saving stroke order… ${d} of ${t}`; });
+    btn.disabled = false;
+    btn.textContent = "Save stroke order for every level";
+    const have = chars.filter(strokesOf).length;
+    say("#setMsg", have === chars.length ? "ok" : "err", have === chars.length
+      ? (n ? `Saved. All ${have} kanji now have stroke order offline.` : `All ${have} kanji already have stroke order.`)
+      : `${have} of ${chars.length} kanji have stroke order. ${chars.length - have - ABSENT.size > 0
+          ? "Some downloads failed; check the connection and try again." : "KanjiVG has no data for the rest."}`);
+    openSettingsStats();
+  };
   $("#exportBtn").onclick = exportBackup;
   $("#resyncBtn").onclick = async () => {
     const tok = await Store.get("token");
@@ -1242,7 +1775,7 @@ function wire(){
     $("#prog").classList.add("hidden");
   };
   $("#resetProg").onclick = async () => {
-    if (!confirm("Reset progress for all 440 kanji? Your downloaded mnemonics stay.")) return;
+    if (!confirm("Reset reading and writing progress for every kanji? Your downloaded mnemonics stay.")) return;
     PROGS = { read: {}, write: {} };
     await Store.set("prog", PROGS.read);
     await Store.set("progw", PROGS.write);
@@ -1253,6 +1786,7 @@ function wire(){
     if (!confirm("Delete the token, the downloaded kanji and your progress from this device?")) return;
     await Store.del("token"); await Store.del("data");
     await Store.del("prog"); await Store.del("progw");
+    await Store.del("strokes"); EXT = {};
     DATA = null; PROGS = { read: {}, write: {} };
     $("#settings").classList.add("hidden");
     $("#setup").classList.remove("hidden");
@@ -1267,11 +1801,15 @@ function wire(){
 (async function boot(){
   await Store.init();
   wire();
-  const [d, p, pw, tok, ord] = await Promise.all([
+  const [d, p, pw, tok, ord, ext, crs, grp] = await Promise.all([
     Store.get("data"), Store.get("prog"), Store.get("progw"),
-    Store.get("token"), Store.get("order")
+    Store.get("token"), Store.get("order"), Store.get("strokes"),
+    Store.get("course"), Store.get("groups")
   ]);
   if (ord === "random" || ord === "easy") order = ord;
+  if (ext && typeof ext === "object") EXT = ext;
+  if (crs === "grade" || crs === "wk") course = crs;
+  if (grp && grp.grade) curGroup = { grade: grp.grade, wk: grp.wk || 1 };
   PROGS.read  = p  || {};
   PROGS.write = pw || {};
   if (tok) $("#tok").value = tok;
