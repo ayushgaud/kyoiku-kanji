@@ -356,6 +356,14 @@ nav#grades.levels{align-items:stretch}
   color:var(--paper); font-size:13px; font-weight:600;
 }
 
+/* Kanji WaniKani hasn't taught you yet: on the page, but in pencil. */
+.cell.st-locked span{color:#C2C0B4}
+.qtype{
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:700;
+  color:var(--sage); margin-bottom:10px; text-align:center;
+}
+.qtype.w{color:var(--shu)}
+
 /* ---------- writing pad ---------- */
 .square.sq-pad{width:min(84vw, 46vh, 330px); touch-action:none; cursor:crosshair}
 .st-body.front .square.sq-pad{width:min(80vw, 44vh, 330px)}
@@ -404,6 +412,7 @@ nav#grades.levels{align-items:stretch}
   .square{background:#1B1A13}
   .step{background:#1B1A13} .replay{background:#1D1C14}
   .seg button,.course button{background:#1D1C14}
+  .cell.st-locked span{color:#45443A}
   .course button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
   #stActions.flip .got{background:#1D1C14}
   .seg button[aria-selected="true"]{background:var(--sumi); color:var(--paper)}
@@ -535,7 +544,7 @@ const GRADES = {
 const GRADE_OF = {};
 for (const g of [1,2,3]) for (const ch of GRADES[g]) GRADE_OF[ch] = +g;
 
-const BUILD = "2026-10-12a";
+const BUILD = "2026-10-12b";
 const WK_API = "https://api.wanikani.com/v2";
 const WK_REV = "20170710";
 
@@ -725,6 +734,7 @@ async function sync(token){
     const parts = (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean);
     const kanjiMeanings = pick(d.meanings).map(x => x.meaning);
     kanji.push({
+      id: s.id,
       c: ch,
       g: GRADE_OF[ch] || 0,
       lv: d.level || 0,
@@ -743,14 +753,74 @@ async function sync(token){
   }
   if (!kanji.length) throw new Error("EMPTY");
 
+  setProgress(90, "Reading your WaniKani progress…");
+  const asg = await fetchAssignments(token);
+
   setProgress(96, "Saving to this device…");
   DATA = { kanji, user, full: true, syncedAt: new Date().toISOString(), source: "WaniKani API" };
+  applyAssignments(asg);
+  DATA.asgAt = new Date().toISOString();
   curGroup.wk = Math.min(user.level, user.max);
   await Store.set("groups", curGroup);
   await Store.set("data", DATA);
   await Store.set("token", token);
   setProgress(100, `Saved ${kanji.length} kanji.`);
   return kanji.length;
+}
+
+/* ---------- your WaniKani progress ----------
+   Assignments say which kanji you've had lessons on and where each sits in
+   WaniKani's SRS. Nothing is ever sent back: your WaniKani reviews stay
+   yours to do on WaniKani. */
+async function fetchAssignments(token, since){
+  let url = `${WK_API}/assignments?subject_types=kanji` +
+            (since ? `&updated_after=${encodeURIComponent(since)}` : "");
+  const out = [];
+  while (url){
+    const body = await wkGet(url, token);
+    out.push(...(body.data || []));
+    url = (body.pages || {}).next_url;
+  }
+  return out;
+}
+function applyAssignments(list){
+  const byId = new Map(DATA.kanji.filter(k => k.id).map(k => [k.id, k]));
+  for (const a of list){
+    const d = a.data || {}, k = byId.get(d.subject_id);
+    if (!k || d.hidden) continue;
+    k.wk = { s: d.srs_stage || 0, st: !!d.started_at,
+             av: d.available_at ? Date.parse(d.available_at) : null };
+  }
+  seedFromWK();
+}
+/* WaniKani stage -> this app's reading box. Apprentice is still learning,
+   Guru is on a weekly interval, Master and up count as known. */
+const STAGE_BOX = [0, 1, 1, 1, 1, 3, 3, 4, 5, 5];
+const fromWK = k => !!(k.wk && k.wk.st && k.wk.s >= 1);
+/* Reading progress for kanji you haven't practised here follows WaniKani,
+   due when WaniKani says it is due. Once you grade one here, it's yours. */
+function seedFromWK(){
+  for (const k of DATA.kanji){
+    if (!fromWK(k)) continue;
+    const p = PROGS.read[k.c];
+    if (p && !p.src) continue;
+    const box = STAGE_BOX[k.wk.s] ?? 5;
+    PROGS.read[k.c] = { box, seen: 1, src: "wk",
+      due: k.wk.av || now() + DAYS[box] * 864e5 };
+  }
+  Store.set("prog", PROGS.read);
+}
+async function refreshWK(){
+  const tok = await Store.get("token");
+  if (!tok || !DATA || !DATA.asgAt || fileOrigin() || !navigator.onLine) return;
+  try {
+    const since = DATA.asgAt, stamp = new Date().toISOString();
+    const list = await fetchAssignments(tok, since);
+    applyAssignments(list);
+    DATA.asgAt = stamp;
+    await Store.set("data", DATA);
+    if (!$("#app").classList.contains("hidden")) renderGrid();
+  } catch(e){ /* offline or token revoked: keep what we have */ }
 }
 
 /* A kanji that is visually identical to a radical gets a pointer instead of a
@@ -780,19 +850,21 @@ function state(ch, which){
   if (!p || !p.seen) return "new";
   return p.box >= 4 ? "known" : "learning";
 }
-function grade(ch, good){
-  const bag = P();
+function grade(ch, good, which){
+  const sk = which || skill, bag = PROGS[sk];
   const p = bag[ch] || { box:0, seen:0, due:0 };
+  delete p.src;                       // practised here now
   p.seen = 1;
   p.box  = good ? Math.min(5, p.box + 1) : 0;
   p.due  = now() + DAYS[p.box] * 864e5;
   bag[ch] = p;
-  Store.set(STORE_KEY[skill], bag);
+  Store.set(STORE_KEY[sk], bag);
 }
 function toggleKnown(ch){
   const bag = P();
   const p = bag[ch] || { box:0, seen:0, due:0 };
   const wasKnown = state(ch) === "known";
+  delete p.src;
   p.seen = 1;
   p.box = wasKnown ? 0 : 5;
   p.due = now() + DAYS[p.box] * 864e5;
@@ -841,10 +913,13 @@ function renderNav(){
       <button class="lv-step" data-d="1" aria-label="Next level"${lv >= max ? " disabled" : ""}>›</button>`;
   }
   const notice = $("#notice");
-  if (course === "wk" && !DATA.full){
+  if (course === "wk" && (!DATA.full || !DATA.asgAt)){
     notice.classList.remove("hidden");
-    notice.innerHTML = `Only your grade 1–3 kanji are on this device. Download again to add every WaniKani level.
-      <button data-resync>Download all levels</button>`;
+    notice.innerHTML = (!DATA.full
+      ? "Only your grade 1–3 kanji are on this device."
+      : "Your WaniKani progress isn’t on this device yet, so every kanji looks new.") +
+      ` Download again to start from where you are on WaniKani.
+      <button data-resync>Download again</button>`;
   } else notice.classList.add("hidden");
 }
 
@@ -867,7 +942,8 @@ function renderGrid(){
   } else {
     grid.style.border = "";
     grid.innerHTML = list.map((k, i) => {
-      const st = state(k.c);
+      const st = course === "wk" && DATA.asgAt && !fromWK(k) && state(k.c) === "new"
+        ? "locked" : state(k.c);
       return `<button class="cell st-${st}"
         style="animation-delay:${Math.min(i,40)*8}ms" data-c="${esc(k.c)}"
         aria-label="${esc(k.c)} — ${esc(k.m[0]||"")}">
@@ -878,6 +954,15 @@ function renderGrid(){
   const known = inGrade.filter(k => state(k.c) === "known").length;
   $("#tally").textContent =
     `${known} / ${inGrade.length} ${skill === "write" ? "writable" : "readable"}`;
+  if (course === "wk" && DATA.asgAt){
+    const n = buildWkSession().length;
+    $("#studyBtn").disabled = !n;
+    $("#studyBtn").textContent = n
+      ? `Review · ${n} card${n === 1 ? "" : "s"}`
+      : "No reviews due";
+    return;
+  }
+  $("#studyBtn").disabled = false;
   const n = buildSession().length;
   const verb = skill === "write" ? "Practise writing" : "Practise reading";
   const waiting = queue().length;
@@ -1391,6 +1476,38 @@ const difficulty  = k => course === "wk"
 const MAX_CARDS = 30;   // per session
 const MAX_NEW   = 10;   // unseen kanji per session, so reviews aren't drowned
 
+/* WaniKani review: everything you've had lessons on, across all levels.
+   One card per kanji per session — the two directions give each other
+   away (a reading card's answer shows the kanji; a writing card's prompt
+   shows the meaning and reading). Writing comes first when it's due; the
+   other direction stays due for next time. */
+const WK_MAX_CARDS = 40, WK_MAX_NEW = 10;
+const wkRank = k => (k.lv || 99) * 100000 + (k.lp ?? 999) * 100 + strokeCount(k);
+function buildWkSession(){
+  const t = now(), due = [], fresh = [];
+  for (const k of DATA.kanji){
+    if (!inCourse(k) || !fromWK(k)) continue;
+    const w = PROGS.write[k.c], r = PROGS.read[k.c];
+    if (w && w.seen && w.due <= t) due.push({ k, sk: "write" });
+    else if (r && r.seen && r.due <= t) due.push({ k, sk: "read" });
+    else if (!w || !w.seen) fresh.push({ k, sk: "write" });
+  }
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } };
+  // New writing starts with the kanji you've known longest on WaniKani.
+  fresh.sort((a, b) => wkRank(a.k) - wkRank(b.k));
+  if (order === "random") shuffle(due);
+  else due.sort((a, b) => wkRank(a.k) - wkRank(b.k));
+  const picked = due.slice(0, WK_MAX_CARDS - Math.min(WK_MAX_NEW, fresh.length));
+  for (const it of fresh){
+    if (picked.length >= WK_MAX_CARDS || picked.filter(x => !PROGS.write[x.k.c]?.seen).length >= WK_MAX_NEW) break;
+    picked.push(it);
+  }
+  if (order === "random") shuffle(picked);
+  else picked.sort((a, b) => wkRank(a.k) - wkRank(b.k));
+  return picked;
+}
+
 function buildSession(){
   const t = now(), bag = P();
   const due = [], fresh = [];
@@ -1427,10 +1544,13 @@ function buildSession(){
   if (order !== "random") picked.sort((a,b) => difficulty(a) - difficulty(b));
   return picked;
 }
+const asItems = list => list.map(k => ({ k, sk: skill }));
 
 function startStudy(){
-  session = buildSession(); sIdx = 0;
-  prefetchStrokes(session.map(k => k.c));
+  session = course === "wk" && DATA.asgAt ? buildWkSession() : asItems(buildSession());
+  sIdx = 0;
+  if (!session.length) return;
+  prefetchStrokes(session.filter(x => x.sk === "write").map(x => x.k.c));
   $("#app").classList.add("hidden");
   $("#study").classList.remove("hidden");
   showCard();
@@ -1450,17 +1570,21 @@ async function showCard(){
     return;
   }
   revealed = false;
-  const k = session[sIdx];
+  const { k, sk } = session[sIdx];
+  // In a mixed session, say which question this is, as WaniKani does.
+  const mixed = session.some(x => x.sk !== sk);
+  const label = !mixed ? "" : sk === "write"
+    ? `<div class="qtype w">Write</div>` : `<div class="qtype">Meaning &amp; reading</div>`;
   $("#stCount").textContent = `${sIdx + 1} / ${session.length}`;
   $("#stActions").classList.add("hidden");
   $("#stBody").classList.add("front");
-  if (skill !== "write"){
-    $("#stBody").innerHTML = `<div class="square"><b>${esc(k.c)}</b></div>
+  if (sk !== "write"){
+    $("#stBody").innerHTML = label + `<div class="square"><b>${esc(k.c)}</b></div>
        <div class="st-tap">Tap to reveal</div>`;
     $("#stBody").onclick = () => reveal();
     return;
   }
-  const prompt = `<div class="wprompt">${esc(k.m.join(", "))}</div>
+  const prompt = label + `<div class="wprompt">${esc(k.m.join(", "))}</div>
        <div class="readings">
          ${k.on.length  ? `<i><span class="eyebrow">On</span>${esc(k.on.join("\u3001"))}</i>` : ""}
          ${k.kun.length ? `<i><span class="eyebrow">Kun</span>${esc(k.kun.join("\u3001"))}</i>` : ""}
@@ -1496,7 +1620,7 @@ function reveal(result){
   revealed = true;
   if (!result && pad) result = pad.result({ gaveUp: pad.remaining > 0 });
   if (pad) pad.stop();
-  const k = session[sIdx];
+  const k = session[sIdx].k;
   suggest = passes(result);
   $("#stBody").onclick = null;
   $("#stBody").classList.remove("front");
@@ -1511,7 +1635,7 @@ function reveal(result){
 
 function answer(good){
   if (!revealed){ reveal(); return; }
-  grade(session[sIdx].c, good);
+  grade(session[sIdx].k.c, good, session[sIdx].sk);
   $("#stActions").classList.remove("flip");
   suggest = true;
   sIdx++;
@@ -1562,7 +1686,7 @@ function subjectsToKanji(subs, radEntries){
     const iparts = (d.component_subject_ids || []).map(id => radMap.get(id)).filter(Boolean);
     const imeanings = pick(d.meanings).map(x => x.meaning);
     out.push({
-      c: ch, g: GRADE_OF[ch] || 0, lv: d.level || 0, lp: d.lesson_position ?? null,
+      id: s.id, c: ch, g: GRADE_OF[ch] || 0, lv: d.level || 0, lp: d.lesson_position ?? null,
       m: pick(d.meanings).map(x => x.meaning),
       on: pick(d.readings).filter(r => r.type === "onyomi").map(r => r.reading),
       kun:pick(d.readings).filter(r => r.type === "kunyomi").map(r => r.reading),
@@ -1649,6 +1773,11 @@ function openSettingsStats(){
   const twins = DATA.kanji.filter(k => k.rad && k.rad.mm).length;
   const strokes = DATA.kanji.filter(k => strokesOf(k.c)).length;
   $("#strokeAllBtn").classList.toggle("hidden", !DATA.full);
+  const started = DATA.kanji.filter(fromWK).length;
+  const checked = DATA.asgAt ? new Date(DATA.asgAt) : null;
+  $("#syncedAt").textContent += checked
+    ? ` WaniKani progress: ${started} kanji learned there, checked ${checked.toLocaleString()}.`
+    : "";
   $("#diag").innerHTML =
     `Build ${BUILD} &middot; ${twins} kanji with a radical mnemonic &middot; ` +
     `${strokes} with stroke order.` +
@@ -1813,7 +1942,7 @@ function wire(){
   PROGS.read  = p  || {};
   PROGS.write = pw || {};
   if (tok) $("#tok").value = tok;
-  if (d && d.kanji && d.kanji.length){ DATA = d; enterApp(); return; }
+  if (d && d.kanji && d.kanji.length){ DATA = d; enterApp(); refreshWK(); return; }
   if (fileOrigin()){
     $("#syncBtn").disabled = true;
     say("#setupMsg", "err",
